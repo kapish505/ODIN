@@ -1,4 +1,4 @@
-**To Run import the project to replit.ai**
+**To Run completely and without any doubt of error import the project to replit.ai**
 
 
 **Note for Judges:** This is still a prototype only,Many things are developed for frontend purpose so that you can evaluate the range of this project,Of course it was not possible for us to complete the whole backend of such a big project along with academic pressure.But we atleast finished the base project.
@@ -7,5 +7,7 @@
 Rest all the  tabs are non functional and just for demo purposes,the trajectory planning tab evaluates the trajectory even more accurately and mathematically (based on lambert equation's),for now it is not that complicated but it is working.We are hoping to complete the whole project in next 1-2 months.If this hackathon wins us some support and money,it will be of huge help,not only financially but also giving us confidence to complete the project.
 For now you can go to the Sidebar and open Autonomous Planner tab and plan the trajectory,or directly click 'Launch Mission Planning' button on the Homepage.
 
-We are sorry that we could not deploy it online,But it is properly working if you import the project to Replit.ai.
+We are sorry if any error occurs in deployment phase,we did our best,we all are in first month of our engineering.
+Thank you to all the organizers,it was a wonderful and learning experience to all of us.
+
 
