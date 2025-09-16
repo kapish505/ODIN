@@ -7,5 +7,15 @@
     "build": "npm --prefix OdinOptimal run build",
     "start": "npm --prefix OdinOptimal run start",
     "check": "npm --prefix OdinOptimal run check"
+  },
+  "dependencies": {
+    "lucide-react": "^0.544.0",
+    "wouter": "^3.7.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.0",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "vite": "^7.1.5"
   }
 }
