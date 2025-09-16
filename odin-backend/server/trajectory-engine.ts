@@ -4,7 +4,7 @@
  * for Earth-to-Moon trajectory calculations
  */
 
-import { type InsertTrajectory } from "@shared/schema";
+import { type InsertTrajectory } from "../shared/schema";
 
 /**
  * Unit conversion utilities for trajectory calculations

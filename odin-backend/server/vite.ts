@@ -3,7 +3,18 @@ import fs from "fs";
 import path from "path";
 import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
-import viteConfig from "../vite.config";
+// If vite.config.ts exists, use the following import:
+// Use dynamic import for compatibility with both .ts and .js
+let viteConfig: any = {};
+try {
+  // @ts-ignore
+  viteConfig = (await import("../vite.config")).default;
+} catch {
+  viteConfig = {};
+}
+
+// If vite.config.ts does not exist or is not a module, create it at ../vite.config.ts with the following content:
+// export default {};
 import { nanoid } from "nanoid";
 
 const viteLogger = createLogger();
@@ -45,12 +56,25 @@ export async function setupVite(app: Express, server: Server) {
     const url = req.originalUrl;
 
     try {
-      const clientTemplate = path.resolve(
-        import.meta.dirname,
-        "..",
-        "client",
-        "index.html",
-      );
+      let clientTemplate;
+      if (process.env.NODE_ENV === "production") {
+        clientTemplate = path.resolve(
+          import.meta.dirname,
+          "..",
+          "..",
+          "odin-frontend",
+          "dist",
+          "index.html"
+        );
+      } else {
+        clientTemplate = path.resolve(
+          import.meta.dirname,
+          "..",
+          "..",
+          "odin-frontend",
+          "index.html"
+        );
+      }
 
       // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");

@@ -17,10 +17,11 @@ import {
   threatEvents,
   aiDecisions,
   trajectories
-} from "@shared/schema";
+} from "../shared/schema";
 import { db } from "./db";
 import { eq, and, desc, gte, lte, or } from "drizzle-orm";
 import bcrypt from "bcrypt";
+// @ts-ignore
 import { customAlphabet } from "nanoid";
 
 // ODIN System Storage Interface
@@ -271,7 +272,7 @@ export class PostgresStorage implements IStorage {
 
   async setActiveTrajectory(missionId: string, trajectoryId: string): Promise<boolean> {
     // Use transaction to prevent race conditions
-    const result = await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx: any) => {
       // First, deactivate all trajectories for this mission
       await tx.update(trajectories)
         .set({ isActive: false })

@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { TrajectoryEngine } from "./trajectory-engine";
-import { insertMissionSchema, insertTrajectorySchema } from "@shared/schema";
+import { insertMissionSchema, insertTrajectorySchema } from "../shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -143,11 +143,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Calculate trajectory using the engine
-      const trajectoryResult = TrajectoryEngine.generateEarthMoonTrajectory(
-        validated.launchWindow,
-        validated.type,
-        validated.flightTime
-      );
+      let trajectoryResult;
+      if (validated.type === "custom") {
+        // Handle custom trajectory type here, or return an error if not supported
+        return res.status(400).json({
+          message: 'Custom trajectory type is not supported by the engine',
+          error: 'CUSTOM_TYPE_NOT_SUPPORTED'
+        });
+      } else {
+        trajectoryResult = TrajectoryEngine.generateEarthMoonTrajectory(
+          validated.launchWindow,
+          validated.type,
+          validated.flightTime
+        );
+      }
       
       // Create trajectory record
       const trajectoryRecord = TrajectoryEngine.generateTrajectoryRecord(

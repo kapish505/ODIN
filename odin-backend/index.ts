@@ -1,21 +1,21 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { registerRoutes } from "./server/routes";
+import { setupVite, serveStatic, log } from "./server/vite";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
+  res.json = function (bodyJson: any, ..._args: any[]) {
     capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
+    return originalResJson.call(res, bodyJson);
   };
 
   res.on("finish", () => {
@@ -38,7 +38,7 @@ app.use((req, res, next) => {
 });
 
 // Set Python backend URL for the existing proxy in routes.ts
-process.env.PY_BACKEND_URL = 'http://localhost:3001';
+process.env.PY_BACKEND_URL = process.env.PY_BACKEND_URL || '';
 
 (async () => {
   const server = await registerRoutes(app);
@@ -64,12 +64,8 @@ process.env.PY_BACKEND_URL = 'http://localhost:3001';
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  const port = parseInt(process.env.PORT || '5050', 10);
+  server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
   });
 })();

@@ -1,10 +1,10 @@
-import { Button } from "@/components/ui/button"
+import { Button } from "../components/ui/button"
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
   DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu"
+} from "../components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Globe, Check } from "lucide-react"
 import { useI18n, type LanguageCode } from "@/contexts/i18n"
