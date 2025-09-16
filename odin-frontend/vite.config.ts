@@ -4,11 +4,14 @@ import path from "path";
 
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "src"),  // adjust src path
-    },
+ resolve: {
+  alias: {
+    "@": path.resolve(__dirname, "src"),
+    "@assets": path.resolve(__dirname, "src/assets"),
   },
+},
+
+
   root: __dirname,      // points to repo root containing index.html
   build: {
     outDir: path.resolve(__dirname, "dist"), // output folder for Vercel
