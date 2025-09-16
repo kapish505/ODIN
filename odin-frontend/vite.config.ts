@@ -6,14 +6,12 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src"),
-      "@shared": path.resolve(__dirname, "../shared"), // optional
-      "@assets": path.resolve(__dirname, "../attached_assets"), // optional
+      "@": path.resolve(__dirname, "src"),  // adjust src path
     },
   },
-  root: path.resolve(__dirname), // root of frontend repo
+  root: __dirname,      // points to repo root containing index.html
   build: {
-    outDir: path.resolve(__dirname, "dist"), // Vercel serves from /dist
+    outDir: path.resolve(__dirname, "dist"), // output folder for Vercel
     emptyOutDir: true,
   },
 });
