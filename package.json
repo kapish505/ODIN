@@ -1,0 +1,11 @@
+{
+  "name": "odin-root",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "npm --prefix OdinOptimal run dev",
+    "build": "npm --prefix OdinOptimal run build",
+    "start": "npm --prefix OdinOptimal run start",
+    "check": "npm --prefix OdinOptimal run check"
+  }
+}
