@@ -10,7 +10,7 @@ app.use(express.urlencoded({ extended: false }));
 
 // Allow requests from Vercel frontend
 app.use(cors({
-  origin: ["https://odin-c-menn.vercel.app/autopilot"], // replace with your actual Vercel frontend URL
+  origin: ["https://odin-c-menn.vercel.app/"], // replace with your actual Vercel frontend URL
   credentials: true,
 }));
 
