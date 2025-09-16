@@ -8,7 +8,7 @@
   "scripts": {
   "dev": "tsx index.ts",
   "build": "esbuild index.ts --platform=node --packages=external --bundle --format=esm --outfile=index.js",
-  "start": "node server/index.js"
+  "start": "node index.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
