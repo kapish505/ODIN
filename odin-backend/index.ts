@@ -56,8 +56,6 @@ process.env.PY_BACKEND_URL = process.env.PY_BACKEND_URL || '';
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
     await setupVite(app, server);
-  } else {
-    serveStatic(app);
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
