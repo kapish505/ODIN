@@ -11,6 +11,7 @@
   "start": "node index.js"
   },
   "dependencies": {
+    "vite": "^5.0.0",
     "@neondatabase/serverless": "^0.10.4",
     "bcrypt": "^6.0.0",
     "drizzle-kit": "^0.31.4",
@@ -25,9 +26,6 @@
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.3",
-    "@types/ws": "^8.18.1",
-    "esbuild": "^0.25.0",
-    "tsx": "^4.0.0",
-    "typescript": "^5.6.3"
+  "@types/ws": "^8.18.1"
   }
 }
