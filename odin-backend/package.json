@@ -6,26 +6,28 @@
     "node": "20.x"
   },
   "scripts": {
-  "dev": "tsx index.ts",
-  "build": "esbuild index.ts --platform=node --packages=external --bundle --format=esm --outfile=index.js",
-  "start": "node index.js"
+    "dev": "tsx index.ts",
+    "build": "esbuild index.ts --platform=node --packages=external --bundle --format=esm --outfile=index.js",
+    "start": "node index.js"
   },
   "dependencies": {
-    "vite": "^5.0.0",
     "@neondatabase/serverless": "^0.10.4",
+    "@types/cors": "^2.8.19",
     "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
     "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.39.1",
     "drizzle-zod": "^0.7.1",
     "express": "^4.21.2",
     "http-proxy-middleware": "^3.0.5",
     "nanoid": "^5.1.5",
+    "vite": "^5.0.0",
     "ws": "^8.18.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.3",
-  "@types/ws": "^8.18.1"
+    "@types/ws": "^8.18.1"
   }
 }

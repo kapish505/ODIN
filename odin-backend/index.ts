@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cors from "cors";
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { registerRoutes } from "./server/routes";
 import { setupVite, serveStatic, log } from "./server/vite";
@@ -6,6 +7,12 @@ import { setupVite, serveStatic, log } from "./server/vite";
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Allow requests from Vercel frontend
+app.use(cors({
+  origin: ["https://odin-c-menn.vercel.app/autopilot"], // replace with your actual Vercel frontend URL
+  credentials: true,
+}));
 
 app.use((req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
