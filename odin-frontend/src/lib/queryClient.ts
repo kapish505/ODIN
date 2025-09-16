@@ -3,7 +3,7 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 // API configuration for Python backend
 const API_BASE_URL = import.meta.env.DEV 
   ? 'http://localhost:3001'  // Development: Python backend on port 3001
-  : 'https://your-actual-render-backend-url.onrender.com';                  // Production: proxy to backend
+  : 'https://odin-n80z.onrender.com';                  // Production: proxy to backend
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
