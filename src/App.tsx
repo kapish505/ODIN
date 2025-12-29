@@ -29,7 +29,7 @@ function Router() {
       <Route path="/trajectory" component={TrajectoryPage} />
       <Route path="/threats" component={ThreatsPage} />
       <Route path="/decisions" component={DecisionsPage} />
-      <Route path="/decisions" component={DecisionsPage} />
+
       <Route component={NotFound} />
     </Switch>
   )

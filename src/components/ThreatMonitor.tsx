@@ -41,14 +41,15 @@ export default function ThreatMonitor() {
   const overallStatus = activeCount > 5 ? "Critical" : activeCount > 2 ? "Elevated" : "Nominal";
   const threatLevel = activeCount > 5 ? "High" : activeCount > 2 ? "Medium" : "Low";
 
-  const getSeverityColor = (type: string) => {
-    // Infer severity from type for now/demo
+  const getSeverityColor = (type?: string) => {
+    if (!type) return "neutral-gray";
     if (type.includes("FLR") || type.includes("CME")) return "warning-amber";
     if (type.includes("SEP")) return "critical-red";
     return "success-green";
   }
 
-  const getThreatIcon = (type: string) => {
+  const getThreatIcon = (type?: string) => {
+    if (!type) return AlertTriangle;
     if (type.includes("FLR")) return Zap;       // Solar Flare
     if (type.includes("CME")) return Radiation; // Coronal Mass Ejection
     if (type.includes("SEP")) return Satellite; // Solar Energetic Particle

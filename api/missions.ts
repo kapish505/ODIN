@@ -30,6 +30,9 @@ const MEMORY_MISSIONS = [
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+    res.setHeader('Content-Type', 'application/json');
+
+    console.log("[Missions API] Received request");
 
     if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
@@ -39,7 +42,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(200).json(MEMORY_MISSIONS);
         }
 
-        const allMissions = await db.select().from(missions).orderBy(desc(missions.launchDate));
+        // DB Race with Timeout
+        const dbPromise = db.select().from(missions).orderBy(desc(missions.launchDate));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("DB_TIMEOUT")), 3000));
+
+        const allMissions = await Promise.race([dbPromise, timeoutPromise]);
         return res.status(200).json(allMissions);
 
     } catch (error) {
