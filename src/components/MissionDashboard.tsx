@@ -4,64 +4,55 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { 
-  Rocket, 
-  Shield, 
-  Brain, 
-  Clock, 
-  Fuel, 
-  AlertTriangle, 
+import { useQuery } from "@tanstack/react-query"
+import { apiRequest } from "@/lib/queryClient"
+import {
+  Rocket,
+  Shield,
+  Brain,
+  Clock,
+  Fuel,
+  AlertTriangle,
   CheckCircle,
-  TrendingUp 
+  TrendingUp,
+  Loader2
 } from "lucide-react"
 
-//todo: remove mock data
-const mockMissionData = {
-  activeMissions: 3,
-  completedMissions: 12,
-  threatLevel: "Low",
-  fuelEfficiency: 94,
-  systemStatus: "Operational"
+interface Mission {
+  id: number;
+  name: string;
+  status: string;
+  progress: number;
+  launchDate: string;
+  arrivalDate: string;
+  threatLevel: string;
 }
 
-//todo: remove mock data 
-const mockActiveMissions = [
-  {
-    id: "ODIN-001",
-    name: "Artemis Support Mission",
-    status: "Active",
-    progress: 78,
-    launchDate: "2024-03-15",
-    arrivalDate: "2024-03-18",
-    threatLevel: "Low"
-  },
-  {
-    id: "ODIN-002", 
-    name: "Lunar Resource Survey",
-    status: "Planning",
-    progress: 45,
-    launchDate: "2024-04-22",
-    arrivalDate: "2024-04-25",
-    threatLevel: "Medium"
-  },
-  {
-    id: "ODIN-003",
-    name: "Communication Relay",
-    status: "Active", 
-    progress: 89,
-    launchDate: "2024-02-28",
-    arrivalDate: "2024-03-03",
-    threatLevel: "Low"
-  }
-]
-
 export default function MissionDashboard() {
-  const [selectedMission, setSelectedMission] = useState(mockActiveMissions[0].id)
+  const [selectedMission, setSelectedMission] = useState<number | null>(null)
+
+  const { data: missions, isLoading, error } = useQuery<Mission[]>({
+    queryKey: ["/api/missions"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/missions");
+      return res.json();
+    }
+  });
+
+  const activeMissions = missions || [];
+
+  // Derive stats from real data
+  const missionStats = {
+    activeCount: activeMissions.filter(m => m.status === "Active").length,
+    systemStatus: error ? "Error" : "Operational",
+    threatLevel: activeMissions.some(m => m.threatLevel === "High") ? "High" : "Low",
+    fuelEfficiency: 94 // Placeholder until we have real telemetry
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Active": return "success-green"
-      case "Planning": return "warning-amber"  
+      case "Planning": return "warning-amber"
       case "Completed": return "space-blue"
       default: return "neutral-gray"
     }
@@ -76,6 +67,24 @@ export default function MissionDashboard() {
     }
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="w-8 h-8 animate-spin text-mission-orange" />
+        <span className="ml-2 text-muted-foreground">Loading mission data...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-96 text-critical-red">
+        <AlertTriangle className="w-8 h-8 mr-2" />
+        <span>Failed to load mission data. Is the backend running?</span>
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 space-y-6">
       {/* Header Stats */}
@@ -85,7 +94,7 @@ export default function MissionDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Active Missions</p>
-                <p className="text-2xl font-bold">{mockMissionData.activeMissions}</p>
+                <p className="text-2xl font-bold">{missionStats.activeCount}</p>
               </div>
               <Rocket className="w-8 h-8 text-mission-orange" />
             </div>
@@ -97,7 +106,7 @@ export default function MissionDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">System Status</p>
-                <p className="text-2xl font-bold text-success-green">{mockMissionData.systemStatus}</p>
+                <p className="text-2xl font-bold text-success-green">{missionStats.systemStatus}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-success-green" />
             </div>
@@ -109,7 +118,7 @@ export default function MissionDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Threat Level</p>
-                <p className="text-2xl font-bold text-success-green">{mockMissionData.threatLevel}</p>
+                <p className="text-2xl font-bold text-success-green">{missionStats.threatLevel}</p>
               </div>
               <Shield className="w-8 h-8 text-success-green" />
             </div>
@@ -121,7 +130,7 @@ export default function MissionDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Fuel Efficiency</p>
-                <p className="text-2xl font-bold">{mockMissionData.fuelEfficiency}%</p>
+                <p className="text-2xl font-bold">{missionStats.fuelEfficiency}%</p>
               </div>
               <TrendingUp className="w-8 h-8 text-success-green" />
             </div>
@@ -139,12 +148,14 @@ export default function MissionDashboard() {
 
         <TabsContent value="missions" className="space-y-4">
           <div className="grid gap-4">
-            {mockActiveMissions.map((mission) => (
-              <Card 
-                key={mission.id} 
-                className={`hover-elevate cursor-pointer transition-all ${
-                  selectedMission === mission.id ? 'ring-2 ring-mission-orange' : ''
-                }`}
+            {activeMissions.length === 0 && (
+              <div className="text-center p-8 text-muted-foreground">No active missions found in database.</div>
+            )}
+            {activeMissions.map((mission) => (
+              <Card
+                key={mission.id}
+                className={`hover-elevate cursor-pointer transition-all ${selectedMission === mission.id ? 'ring-2 ring-mission-orange' : ''
+                  }`}
                 onClick={() => {
                   setSelectedMission(mission.id)
                   console.log(`Selected mission: ${mission.name}`)
@@ -155,7 +166,7 @@ export default function MissionDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="text-lg">{mission.name}</CardTitle>
-                      <p className="text-sm text-muted-foreground">Mission ID: {mission.id}</p>
+                      <p className="text-sm text-muted-foreground">Mission ID: ODIN-{mission.id}</p>
                     </div>
                     <div className="flex gap-2">
                       <Badge className={`bg-${getStatusColor(mission.status)}/20 text-${getStatusColor(mission.status)}`}>
@@ -172,19 +183,19 @@ export default function MissionDashboard() {
                     <div>
                       <div className="flex items-center justify-between text-sm mb-2">
                         <span>Mission Progress</span>
-                        <span>{mission.progress}%</span>
+                        <span>{mission.progress || 0}%</span>
                       </div>
-                      <Progress value={mission.progress} className="h-2" />
+                      <Progress value={mission.progress || 0} className="h-2" />
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div className="flex items-center gap-2">
                         <Clock className="w-4 h-4 text-muted-foreground" />
-                        <span>Launch: {mission.launchDate}</span>
+                        <span>Launch: {new Date(mission.launchDate).toLocaleDateString()}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Rocket className="w-4 h-4 text-muted-foreground" />
-                        <span>Arrival: {mission.arrivalDate}</span>
+                        <span>Arrival: {new Date(mission.arrivalDate).toLocaleDateString()}</span>
                       </div>
                     </div>
 

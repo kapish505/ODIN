@@ -92,17 +92,24 @@ export default function AutonomousPlanner() {
   }
 
   async function loadLocalDataset(): Promise<any> {
-    if (!datasetUrl.trim()) throw new Error("Dataset URL is required")
-    const target = encodeURIComponent(datasetUrl.trim())
-    const res = await fetch(`/api/proxy-json?url=${target}`, { cache: "no-store" })
-    if (!res.ok) {
-      const msg = await res.text().catch(() => "")
-      throw new Error(`Dataset fetch failed (${res.status}) ${msg}`)
+    try {
+      if (!datasetUrl.trim()) throw new Error("Dataset URL is required")
+      const target = encodeURIComponent(datasetUrl.trim())
+      const res = await fetch(`/api/proxy-json?url=${target}`, { cache: "no-store" })
+      if (!res.ok) {
+        throw new Error(`Dataset fetch failed (${res.status})`)
+      }
+      const data = await res.json()
+      setDatasetJson(data)
+      appendLog({ timestamp: new Date().toISOString(), type: "info", message: "Dataset loaded via proxy" })
+      return data
+    } catch (err) {
+      console.warn("Proxy fetch failed, falling back to mock data", err)
+      const { mockSpaceWeatherData } = await import("@/lib/mockData")
+      setDatasetJson(mockSpaceWeatherData)
+      appendLog({ timestamp: new Date().toISOString(), type: "warn", message: "Network unavailable. Using onboard backup data." })
+      return mockSpaceWeatherData
     }
-    const data = await res.json()
-    setDatasetJson(data)
-    appendLog({ timestamp: new Date().toISOString(), type: "info", message: "Dataset loaded" })
-    return data
   }
 
   function severityToRisk(sev: string): number {
@@ -121,22 +128,22 @@ export default function AutonomousPlanner() {
     const base = 0.1
     const sevAmp = (sev?: string) => severityToRisk(sev || "")
     const pts: number[] = []
-    
+
     // Pre-calculate event data to avoid repeated computations
     const eventData = events.map(e => ({
       timestamp: new Date(e.date || e.timestamp || 0).getTime(),
       severity: sevAmp(e.severity)
     }))
-    
+
     for (let i = 0; i < samples; i++) {
       const t = start.getTime() + (i / (samples - 1)) * span
       let v = base
-      
+
       // Optimized loop with early exit for distant events
       for (const e of eventData) {
         const timeDiff = Math.abs(t - e.timestamp)
         if (timeDiff > 3 * sigma) continue // Skip events too far away
-        
+
         const w = Math.exp(-Math.pow(timeDiff, 2) / (2 * sigma * sigma))
         v += e.severity * w
       }
@@ -155,7 +162,7 @@ export default function AutonomousPlanner() {
     // Pre-filter events to only those within extended window for better performance
     const extendedStart = new Date(start.getTime() - 24 * 3600 * 1000) // 1 day before
     const extendedEnd = new Date(end.getTime() + 24 * 3600 * 1000) // 1 day after
-    
+
     const relevantEvents = events.filter((e) => {
       const d = new Date(e.date || e.timestamp || 0)
       return d >= extendedStart && d <= extendedEnd
@@ -176,7 +183,7 @@ export default function AutonomousPlanner() {
       risk_score: severityToRisk(e.severity),
       event: e,
     }))
-    
+
     const overallRisk = riskItems.length
       ? Math.min(0.95, riskItems.reduce((a, b) => a + b.risk_score, 0) / riskItems.length)
       : 0.25
@@ -256,7 +263,7 @@ export default function AutonomousPlanner() {
     const start = performance.now()
     let lastUpdateTime = 0
     const updateInterval = 50 // Throttle Plotly updates to every 50ms (20fps) instead of 60fps
-    
+
     const step = (now: number) => {
       const p = Math.min(1, (now - start) / durationMs)
       const idx = Math.min(points.length - 1, Math.floor(p * (points.length - 1)))
@@ -332,11 +339,11 @@ export default function AutonomousPlanner() {
           appendLog({ timestamp: new Date().toISOString(), type: "info", message: "Analyzing threats (local)" })
           const thJson = buildLocalThreats(nowIso)
           setRisk(thJson)
-          
+
           const riskVal = thJson?.risk_assessment?.overall_risk || 0
           const decision = riskVal > 0.6 ? "delay_orbit_insertion" : "proceed_with_caution"
           appendLog({ timestamp: new Date().toISOString(), type: "decision", message: `Risk analysis complete: ${decision}`, meta: { risk: riskVal } })
-          
+
           return { riskVal, decision }
         } catch (error) {
           appendLog({ timestamp: new Date().toISOString(), type: "error", message: `Risk analysis failed: ${error}` })
@@ -359,13 +366,13 @@ export default function AutonomousPlanner() {
       setTrajectoryPoints(points)
       setMetrics({ deltaV, transferTimeHours: tSec / 3600, fuelEfficiency: Math.max(0, 100 - deltaV / 10) })
       appendLog({ timestamp: new Date().toISOString(), type: "info", message: "Trajectory calculation complete" })
-      
+
       const durationMs = (tSec * 1000) / Math.max(1, speedMultiplier)
       animateAlong(points, durationMs)
 
       // Wait for risk analysis to complete
       const { riskVal, decision } = await riskAnalysisPromise
-      
+
       appendLog({ timestamp: new Date().toISOString(), type: "decision", message: `Final decision: ${decision}`, meta: { risk: riskVal } })
       setPlannerState("completed")
     } catch (err: any) {
@@ -397,25 +404,25 @@ export default function AutonomousPlanner() {
     }
     const transfer = trajectoryPoints.length
       ? {
-          x: trajectoryPoints.map((p) => p.x),
-          y: trajectoryPoints.map((p) => p.y),
-          z: trajectoryPoints.map((p) => p.z),
-          type: "scattergl" as const, // Use WebGL for better performance
-          mode: "lines", // Remove markers for better performance
-          name: "Transfer",
-          line: { color: "#f97316", width: 3 },
-        }
+        x: trajectoryPoints.map((p) => p.x),
+        y: trajectoryPoints.map((p) => p.y),
+        z: trajectoryPoints.map((p) => p.z),
+        type: "scattergl" as const, // Use WebGL for better performance
+        mode: "lines", // Remove markers for better performance
+        name: "Transfer",
+        line: { color: "#f97316", width: 3 },
+      }
       : null
     const replan = altTrajectoryPoints && altTrajectoryPoints.length
       ? {
-          x: altTrajectoryPoints.map((p) => p.x),
-          y: altTrajectoryPoints.map((p) => p.y),
-          z: altTrajectoryPoints.map((p) => p.z),
-          type: "scattergl" as const, // Use WebGL for better performance
-          mode: "lines",
-          name: "Replan",
-          line: { color: "#60a5fa", width: 2, dash: "dot" },
-        }
+        x: altTrajectoryPoints.map((p) => p.x),
+        y: altTrajectoryPoints.map((p) => p.y),
+        z: altTrajectoryPoints.map((p) => p.z),
+        type: "scattergl" as const, // Use WebGL for better performance
+        mode: "lines",
+        name: "Replan",
+        line: { color: "#60a5fa", width: 2, dash: "dot" },
+      }
       : null
 
     const startPos = trajectoryPoints.length ? trajectoryPoints[0] : { x: 0, y: EARTH_RADIUS + 200, z: 0 }
@@ -437,26 +444,26 @@ export default function AutonomousPlanner() {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
     scene: {
-      xaxis: { 
-        title: "km", 
-        gridcolor: "#334155", 
-        zerolinecolor: "#334155", 
+      xaxis: {
+        title: "km",
+        gridcolor: "#334155",
+        zerolinecolor: "#334155",
         color: "#e5e7eb",
         showgrid: true,
         gridwidth: 1 // Thinner grid for better performance
       },
-      yaxis: { 
-        title: "km", 
-        gridcolor: "#334155", 
-        zerolinecolor: "#334155", 
+      yaxis: {
+        title: "km",
+        gridcolor: "#334155",
+        zerolinecolor: "#334155",
         color: "#e5e7eb",
         showgrid: true,
         gridwidth: 1
       },
-      zaxis: { 
-        title: "km", 
-        gridcolor: "#334155", 
-        zerolinecolor: "#334155", 
+      zaxis: {
+        title: "km",
+        gridcolor: "#334155",
+        zerolinecolor: "#334155",
         color: "#e5e7eb",
         showgrid: true,
         gridwidth: 1
