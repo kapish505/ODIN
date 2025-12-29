@@ -45,16 +45,23 @@ export const getQueryFn: <T>(options: {
       // If API_BASE_URL is just '/api', we need to append
       const fullUrl = endpoint.startsWith("http") ? endpoint : (endpoint.startsWith("/api") ? endpoint : `${API_BASE_URL}/${endpoint}`);
 
-      const res = await fetch(fullUrl, {
-        credentials: "include",
-      });
+      console.log(`[QueryClient] Fetching: ${fullUrl}`);
 
-      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-        return null;
+      try {
+        const res = await fetch(fullUrl, {
+          credentials: "include",
+        });
+
+        if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+          return null;
+        }
+
+        await throwIfResNotOk(res);
+        return await res.json();
+      } catch (e) {
+        console.error(`[QueryClient] Fetch failed for ${fullUrl}:`, e);
+        throw e;
       }
-
-      await throwIfResNotOk(res);
-      return await res.json();
     };
 
 export const queryClient = new QueryClient({

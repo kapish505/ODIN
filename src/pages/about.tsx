@@ -87,22 +87,7 @@ export default function AboutPage() {
                         </Card>
                     </div>
 
-                    {/* Section 3: Developer Note */}
-                    <div className="pt-8 text-center space-y-4">
-                        <Separator className="bg-white/10 mb-8" />
-                        <h3 className="text-xl font-display text-white">Credits</h3>
-                        <div className="flex justify-center gap-8 text-sm text-gray-500 font-mono">
-                            <div className="flex items-center gap-2">
-                                <Code2 className="w-4 h-4" />
-                                Frontend: React / Tailwind / Plotly
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Satellite className="w-4 h-4" />
-                                Backend: Node.js / Express / Drizzle
-                            </div>
-                        </div>
-                        <p className="text-xs text-gray-600 mt-4">Made by Team C-Men • 2024</p>
-                    </div>
+
                 </div>
             </div>
         </div>
