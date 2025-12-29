@@ -60,7 +60,7 @@ export default function TrajectoryViewer() {
   }, [launchDate]);
 
   // 2. Data Fetching (The "Truth")
-  const { data: notifications } = useQuery<any[]>({
+  const { data: notifications, isLoading: isWeatherLoading } = useQuery<any[]>({
     queryKey: ["/api/weather/notifications", launchDate],
     queryFn: async () => {
       const dateObj = new Date(launchDate);
@@ -307,24 +307,47 @@ export default function TrajectoryViewer() {
                   <span className="text-xs text-muted-foreground w-12">Speed</span>
                   <Slider value={speed} onValueChange={setSpeed} max={100} min={1} step={1} className="w-24" />
                 </div>
-                <Button size="sm" variant={isPlaying ? "destructive" : "default"} onClick={() => {
-                  // If mission ended (frame 100) or we want to restart
-                  if (animationFrame >= 100) {
-                    setAnimationFrame(0);
-                    setSimulationPhase('NOMINAL');
-                    setLogs([]);
-                    setIsPlaying(true);
-                    return;
-                  }
+                <Button
+                  size="sm"
+                  variant={isPlaying ? "destructive" : "default"}
+                  disabled={isWeatherLoading}
+                  onClick={() => {
+                    // If mission ended (frame 100) or we want to restart
+                    if (animationFrame >= 100) {
+                      setAnimationFrame(0);
+                      setSimulationPhase('NOMINAL');
+                      setLogs([]);
 
-                  if (!isPlaying && simulationPhase === 'IDLE') {
-                    setSimulationPhase('NOMINAL');
-                    setAnimationFrame(0);
-                  }
-                  setIsPlaying(!isPlaying)
-                }}>
-                  {isPlaying ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-                  {animationFrame >= 100 ? "Restart Mission" : isPlaying ? "Pause" : "Simulate Mission"}
+                      // DEBUG: Log Launch Context
+                      const loadedCount = notifications?.length || 0;
+                      addLog("INFO", `[DEBUG] Weather Data: ${loadedCount > 0 ? 'Loaded' : 'None'} (${loadedCount} alerts)`);
+                      addLog("INFO", `[DEBUG] Launch Date: ${launchDate}`);
+
+                      setIsPlaying(true);
+                      return;
+                    }
+
+                    if (!isPlaying && simulationPhase === 'IDLE') {
+                      setSimulationPhase('NOMINAL');
+                      setAnimationFrame(0);
+
+                      // DEBUG: Log Launch Context on first start
+                      const loadedCount = notifications?.length || 0;
+                      addLog("INFO", `[DEBUG] Weather Data: ${loadedCount > 0 ? 'Loaded' : 'None'} (${loadedCount} alerts)`);
+                      addLog("INFO", `[DEBUG] Launch Date: ${launchDate}`);
+                    }
+                    setIsPlaying(!isPlaying)
+                  }}>
+                  {isWeatherLoading ? (
+                    <span className="flex items-center gap-2">
+                      <Orbit className="w-4 h-4 animate-spin" /> Syncing...
+                    </span>
+                  ) : (
+                    <>
+                      {isPlaying ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                      {animationFrame >= 100 ? "Restart Mission" : isPlaying ? "Pause" : "Simulate Mission"}
+                    </>
+                  )}
                 </Button>
               </div>
             </CardHeader>

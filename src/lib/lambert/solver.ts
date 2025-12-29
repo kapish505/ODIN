@@ -231,8 +231,8 @@ export function assessMissionRisk(constraint: WeatherConstraint, timeOfFlightDay
 
     let riskLevel: "Low" | "Medium" | "High" | "Critical" = "Low";
 
-    if (riskScore > 80) riskLevel = "Critical";
-    else if (riskScore > 50) riskLevel = "High";
+    if (riskScore >= 80) riskLevel = "Critical";
+    else if (riskScore >= 50) riskLevel = "High";
     else if (riskScore > 20) riskLevel = "Medium";
 
     const colors = {
