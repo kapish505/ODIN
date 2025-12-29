@@ -78,9 +78,13 @@ export default function MissionDashboard() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-96 text-critical-red">
-        <AlertTriangle className="w-8 h-8 mr-2" />
-        <span>Failed to load mission data. Is the backend running?</span>
+      <div className="flex flex-col items-center justify-center h-96 text-critical-red gap-2">
+        <AlertTriangle className="w-12 h-12" />
+        <span className="font-bold text-lg">Mission Database Unavailable</span>
+        <span className="text-sm text-muted-foreground">Operating in Minimal Safe Mode</span>
+        <Button variant="outline" onClick={() => window.location.reload()} className="mt-4">
+          Retry Connection
+        </Button>
       </div>
     )
   }

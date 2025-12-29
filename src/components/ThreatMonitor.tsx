@@ -11,8 +11,15 @@ import {
   CheckCircle,
   Loader2,
   WifiOff,
-  RefreshCw
+  RefreshCw,
+  Info
 } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface Threat {
   activityID: string;
@@ -20,6 +27,19 @@ interface Threat {
   messageBody?: string;
   messageIssueTime?: string;
 }
+
+const THREAT_TYPES: Record<string, string> = {
+  "FLR": "Solar Flare",
+  "SEP": "Solar Energetic Particle",
+  "CME": "Coronal Mass Ejection",
+  "IPS": "Interplanetary Shock",
+  "MPC": "Magnetopause Crossing",
+  "GST": "Geomagnetic Storm",
+  "RBE": "Radiation Belt Enhancement",
+  "HSS": "High Speed Stream",
+  "WSAEnlil": "Solar Wind Model",
+  "REPORT": "Space Weather Report"
+};
 
 export default function ThreatMonitor() {
   const [selectedThreat, setSelectedThreat] = useState<string | null>(null)
@@ -33,7 +53,7 @@ export default function ThreatMonitor() {
     try {
       // 8-second timeout for fetch
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s
 
       const res = await fetch("/api/weather/notifications", { signal: controller.signal });
       clearTimeout(timeoutId);
@@ -66,8 +86,8 @@ export default function ThreatMonitor() {
   const getSeverityColor = (type?: string) => {
     if (!type) return "neutral-gray";
     const t = type.toUpperCase();
-    if (t.includes("FLR") || t.includes("CME")) return "warning-amber";
-    if (t.includes("SEP")) return "critical-red";
+    if (t.includes("FLR") || t.includes("CME") || t.includes("GST")) return "warning-amber";
+    if (t.includes("SEP") || t.includes("RBE")) return "critical-red";
     return "success-green";
   }
 
@@ -76,8 +96,29 @@ export default function ThreatMonitor() {
     const t = type.toUpperCase();
     if (t.includes("FLR")) return Zap;
     if (t.includes("CME")) return Radiation;
-    if (t.includes("SEP")) return Satellite;
+    if (t.includes("SEP") || t.includes("RBE")) return Satellite;
     return AlertTriangle;
+  }
+
+  // Helper to get formatted name
+  const getReadableName = (type?: string) => {
+    if (!type) return "Unknown Anomaly";
+    // Check known codes
+    for (const [code, name] of Object.entries(THREAT_TYPES)) {
+      if (type.toUpperCase().includes(code)) return name;
+    }
+    return type; // Fallback to raw type if not found
+  }
+
+  // Helper to extract a short preview from the body
+  const getPreviewText = (body?: string) => {
+    if (!body) return "No telemetry data available.";
+    // Try to find summary section
+    const summaryMatch = body.match(/## Summary:([\s\S]*?)(##|$)/);
+    if (summaryMatch && summaryMatch[1]) {
+      return summaryMatch[1].trim().slice(0, 120) + "...";
+    }
+    return body.slice(0, 120) + "...";
   }
 
   // Loading State
@@ -157,11 +198,31 @@ export default function ThreatMonitor() {
       <Card className="bg-black/60 backdrop-blur border-white/10 flex-1">
         <CardHeader className="border-b border-white/5 py-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-mono uppercase tracking-widest flex items-center gap-2">
-              <Zap className="w-4 h-4 text-yellow-400" />
-              Telescope Telemetry (NASA DONKI)
-            </CardTitle>
-            <Button size="sm" variant="ghost" onClick={fetchThreats} className="h-8 w-8 p-0">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-mono uppercase tracking-widest flex items-center gap-2">
+                <Zap className="w-4 h-4 text-yellow-400" />
+                DSN Telemetry Feed
+              </CardTitle>
+              <Badge variant="outline" className="border-white/10 text-[10px] text-gray-500 bg-white/5">NASA DONKI API</Badge>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Info className="w-3 h-3 text-gray-500 hover:text-white transition-colors" />
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-black border border-white/20 text-white max-w-xs p-3">
+                    <p className="text-xs">
+                      <strong>Database of Notifications, Knowledge, Information (DONKI)</strong>
+                      <br /><br />
+                      Real-time space weather data provided by NASA's Goddard Space Flight Center.
+                      Monitors Solar Flares (FLR), CMEs, and Geomagnetic Storms that impact spacecraft operations.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            <Button size="sm" variant="ghost" onClick={fetchThreats} className="h-8 w-8 p-0" title="Refresh Telemetry">
               <RefreshCw className="w-4 h-4" />
             </Button>
           </div>
@@ -179,6 +240,8 @@ export default function ThreatMonitor() {
               const isSelected = selectedThreat === threat.activityID
               const severityColor = getSeverityColor(threat.messageType);
               const dateObj = threat.messageIssueTime ? new Date(threat.messageIssueTime) : new Date();
+              const readableName = getReadableName(threat.messageType);
+              const previewText = getPreviewText(threat.messageBody);
 
               return (
                 <div
@@ -193,23 +256,40 @@ export default function ThreatMonitor() {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <h4 className="font-bold text-white text-sm truncate pr-4">
-                          {threat.messageType || "UNKNOWN ANOMALY"}
-                        </h4>
+                        <div className="flex flex-col">
+                          <h4 className="font-bold text-white text-sm truncate pr-4">
+                            {readableName}
+                          </h4>
+                          <span className="text-[10px] text-gray-400 font-mono tracking-wide">CODE: {threat.messageType}</span>
+                        </div>
                         <span className="text-[10px] font-mono text-gray-500 shrink-0">
                           {dateObj.toLocaleDateString()} {dateObj.toLocaleTimeString()}
                         </span>
                       </div>
 
-                      <p className="text-xs text-gray-400 line-clamp-1 font-mono">
-                        ID: {threat.activityID}
-                      </p>
+                      {/* Show Preview if not selected */}
+                      {!isSelected && (
+                        <p className="text-xs text-gray-500 line-clamp-1 mt-1 font-mono opacity-70">
+                          {previewText}
+                        </p>
+                      )}
 
                       {isSelected && (
                         <div className="mt-4 pt-4 border-t border-white/5 animate-in fade-in slide-in-from-top-2">
-                          <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+                          <div className="mb-2">
+                            <span className="text-[10px] uppercase text-gray-600 font-bold tracking-widest">Full Transmission</span>
+                          </div>
+                          <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed font-mono text-xs">
                             {threat.messageBody || "No details provided."}
                           </p>
+                          <div className="mt-4 flex gap-2">
+                            <Button size="sm" variant="secondary" className="h-7 text-xs bg-white/10 hover:bg-white/20 text-white border-none">
+                              Archive Log
+                            </Button>
+                            <Button size="sm" className="h-7 text-xs bg-mission-orange text-black hover:bg-white">
+                              Analyze Impact
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>
