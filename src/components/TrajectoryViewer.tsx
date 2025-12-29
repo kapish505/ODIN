@@ -9,7 +9,8 @@ import {
   Orbit,
   Calculator,
   AlertTriangle,
-  ShieldAlert
+  ShieldAlert,
+  Calendar
 } from "lucide-react"
 import Plotly from "plotly.js-dist-min"
 import createPlotlyComponent from "react-plotly.js/factory"
@@ -21,14 +22,43 @@ const Plot = createPlotlyComponent(Plotly)
 
 export default function TrajectoryViewer() {
   const [tof, setTof] = useState([72]) // Time of flight in hours
+  const [launchDate, setLaunchDate] = useState<string>(new Date().toISOString().slice(0, 16)); // Default to now
   const [startPos, setStartPos] = useState<Vector3>({ x: 7000, y: 0, z: 0 })
-  const [targetPos, setTargetPos] = useState<Vector3>({ x: -384400, y: 0, z: 0 }) // Moon approx
 
-  // Fetch Space Weather for Launch Go/No-Go
+  // Calculate Moon Position based on Date (Simplified Circular Model)
+  // Moon orbits Earth every ~27.32 days.
+  // We'll anchor 0 degrees to some epoch and rotate.
+  const targetPos = useMemo(() => {
+    const epoch = new Date("2024-01-01T00:00:00Z").getTime();
+    const currentCallback = new Date(launchDate).getTime();
+    const diffDays = (currentCallback - epoch) / (1000 * 60 * 60 * 24);
+
+    const period = 27.32; // Sidereal month
+    const distance = 384400; // Semi-major axis (km)
+
+    // Calculate angle in radians
+    const angle = (diffDays / period) * 2 * Math.PI;
+
+    return {
+      x: distance * Math.cos(angle),
+      y: distance * Math.sin(angle),
+      z: 0 // Simplified 2D plane for demo
+    };
+  }, [launchDate]);
+
+  // Fetch Space Weather for specific Launch Window
   const { data: notifications } = useQuery<any[]>({
-    queryKey: ["/api/weather/notifications"],
+    queryKey: ["/api/weather/notifications", launchDate],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/weather/notifications");
+      // Fetch weather for the specific launch day window + TOF
+      const dateObj = new Date(launchDate);
+      const dateStr = dateObj.toISOString().split('T')[0];
+      // For demo, we search a week around launch date to catch events
+      const endDateObj = new Date(dateObj);
+      endDateObj.setDate(endDateObj.getDate() + 7);
+      const endDateStr = endDateObj.toISOString().split('T')[0];
+
+      const res = await apiRequest("GET", `/api/weather/notifications?startDate=${dateStr}&endDate=${endDateStr}`);
       return res.json();
     }
   });
@@ -36,19 +66,20 @@ export default function TrajectoryViewer() {
   const weatherConstraint: WeatherConstraint = useMemo(() => {
     if (!notifications) return { solarFlare: false, geomagneticStorm: false, radiationFlux: 0 };
 
-    // Check for active alerts in the last 24h
-    const now = new Date();
-    const activeAlerts = notifications.filter(n => {
-      const issueTime = new Date(n.messageIssueTime);
-      return (now.getTime() - issueTime.getTime()) < (24 * 60 * 60 * 1000);
+    const launchTime = new Date(launchDate).getTime();
+    // Check for alerts active during the flight window
+    const windowAlerts = notifications.filter(n => {
+      const issueTime = new Date(n.messageIssueTime).getTime();
+      // Check if alert was issued recently or during flight
+      return Math.abs(issueTime - launchTime) < (48 * 60 * 60 * 1000);
     });
 
     return {
-      solarFlare: activeAlerts.some(n => n.messageType.includes("FLR")),
-      geomagneticStorm: activeAlerts.some(n => n.messageType.includes("CME") || n.messageType.includes("GST")),
-      radiationFlux: activeAlerts.some(n => n.messageType.includes("SEP")) ? 100 : 10 // Arbitrary flux values for demo logic
+      solarFlare: windowAlerts.some(n => n.messageType.includes("FLR")),
+      geomagneticStorm: windowAlerts.some(n => n.messageType.includes("CME") || n.messageType.includes("GST")),
+      radiationFlux: windowAlerts.some(n => n.messageType.includes("SEP")) ? 100 : 10
     };
-  }, [notifications]);
+  }, [notifications, launchDate]);
 
   // Assessment
   const missionRisks = useMemo(() => {
@@ -62,18 +93,13 @@ export default function TrajectoryViewer() {
 
   // Calculate Physics Metrics
   const deltaV = useMemo(() => {
-    // Rough vectors for demo calculation (since generateLambertTrajectory creates points, not velocity vectors directly exposed yet)
-    // We'd theoretically run solveLambert() here to get v1, v2
-    // For MVP "Realism" approximation based on positions:
-    // P1: startPos, P2: targetPos
-    // We assume standard Hohmann-like efficiency for baseline, then add penalties
+    // Rough vectors for demo calculation
     const calculated = calculateDeltaV(
-      { x: 10, y: 0, z: 0 }, // Placeholder v1 (would come from full solver)
-      { x: 1, y: 0, z: 0 },  // Placeholder v2
+      { x: 10, y: 0, z: 0 },
+      { x: 1, y: 0, z: 0 },
       startPos,
       targetPos
     );
-    // Add penalty for "Safety Maneuvers" if risk is high
     const penalty = missionRisks.riskLevel === "High" ? 0.5 : missionRisks.riskLevel === "Critical" ? 999 : 0;
     return calculated + penalty;
   }, [startPos, targetPos, missionRisks]);
@@ -190,25 +216,19 @@ export default function TrajectoryViewer() {
               </div>
 
               <div className="space-y-2">
-                <Label>Target Position (km)</Label>
-                <div className="grid grid-cols-2 gap-2">
+                <Label>Mission Launch Date</Label>
+                <div className="grid grid-cols-1 gap-2">
                   <div>
-                    <span className="text-xs text-muted-foreground">X</span>
-                    <Input
-                      type="number"
-                      value={targetPos.x}
-                      onChange={e => setTargetPos({ ...targetPos, x: Number(e.target.value) })}
-                      className="bg-white/5"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground">Y</span>
-                    <Input
-                      type="number"
-                      value={targetPos.y}
-                      onChange={e => setTargetPos({ ...targetPos, y: Number(e.target.value) })}
-                      className="bg-white/5"
-                    />
+                    <span className="text-xs text-muted-foreground mb-1 block">Data Source: NASA DONKI & Ephemeris</span>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="datetime-local"
+                        value={launchDate}
+                        onChange={e => setLaunchDate(e.target.value)}
+                        className="bg-white/5"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

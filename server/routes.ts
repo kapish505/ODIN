@@ -181,12 +181,24 @@ export function registerRoutes(app: Express): Server {
         try {
             // Use DEMO_KEY for prototype, or ENV variable if available
             const apiKey = process.env.NASA_API_KEY || "DEMO_KEY";
-            // Fetch notifications from the last 30 days
-            const startDate = new Date();
-            startDate.setDate(startDate.getDate() - 30);
-            const dateStr = startDate.toISOString().split('T')[0];
 
-            const apiUrl = `https://api.nasa.gov/DONKI/notifications?startDate=${dateStr}&type=all&api_key=${apiKey}`;
+            // Get dates from query or default to last 30 days
+            let dateStr = "";
+            let endDateStr = "";
+
+            if (req.query.startDate) {
+                dateStr = req.query.startDate as string;
+            } else {
+                const startDate = new Date();
+                startDate.setDate(startDate.getDate() - 30);
+                dateStr = startDate.toISOString().split('T')[0];
+            }
+
+            if (req.query.endDate) {
+                endDateStr = `&endDate=${req.query.endDate as string}`;
+            }
+
+            const apiUrl = `https://api.nasa.gov/DONKI/notifications?startDate=${dateStr}${endDateStr}&type=all&api_key=${apiKey}`;
 
             console.log(`Fetching space weather from: ${apiUrl}`);
             const response = await fetch(apiUrl);
