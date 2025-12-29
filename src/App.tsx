@@ -15,7 +15,7 @@ import MissionDashboard from "@/components/MissionDashboard"
 import TrajectoryViewer from "@/components/TrajectoryViewer"
 import ThreatMonitor from "@/components/ThreatMonitor"
 import DecisionLog from "@/components/DecisionLog"
-import AutonomousPlanner from "@/components/AutonomousPlanner"
+
 
 import NotFound from "@/pages/not-found"
 
@@ -27,7 +27,7 @@ function Router() {
       <Route path="/trajectory" component={TrajectoryPage} />
       <Route path="/threats" component={ThreatsPage} />
       <Route path="/decisions" component={DecisionsPage} />
-      <Route path="/autopilot" component={AutopilotPage} />
+      <Route path="/decisions" component={DecisionsPage} />
       <Route component={NotFound} />
     </Switch>
   )
@@ -93,17 +93,7 @@ function DecisionsPage() {
   )
 }
 
-function AutopilotPage() {
-  return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground">Autonomous Planner</h1>
-        <p className="text-muted-foreground">Plan and replan trajectories automatically with hazard checks and live logs</p>
-      </div>
-      <AutonomousPlanner />
-    </div>
-  )
-}
+
 
 export default function App() {
   const [showLanding, setShowLanding] = useState(true)
@@ -191,7 +181,7 @@ export default function App() {
                 <main className="flex-1 overflow-auto bg-background">
                   <Router />
                 </main>
-                
+
                 {/* Footer */}
                 <footer className="border-t border-border bg-background/95 backdrop-blur-sm p-4">
                   <div className="text-center text-sm text-muted-foreground">

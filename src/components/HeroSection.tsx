@@ -9,7 +9,7 @@ export default function HeroSection() {
   const [, setLocation] = useLocation()
 
   const handleGetStarted = () => {
-    setLocation("/autopilot")
+    setLocation("/trajectory")
   }
 
   const handleViewDemo = () => {
