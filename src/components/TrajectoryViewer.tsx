@@ -227,10 +227,10 @@ export default function TrajectoryViewer() {
 
 
   // 5. Visualization Data Construction
-  const plotData = useMemo(() => {
-    // Current Path depends on phase
-    const currentPath = simulationPhase === 'OPTIMIZED' ? optimizedPath : nominalPath;
+  // Hoist currentPath so it's accessible for HUD telemetry
+  const currentPath = simulationPhase === 'OPTIMIZED' ? optimizedPath : nominalPath;
 
+  const plotData = useMemo(() => {
     const earth = {
       x: [0], y: [0], z: [0],
       mode: 'markers',
@@ -286,7 +286,7 @@ export default function TrajectoryViewer() {
     };
 
     return [earth, moon, nominalTrace, optimizedTrace, spacecraft];
-  }, [nominalPath, optimizedPath, targetPos, simulationPhase, animationFrame]);
+  }, [nominalPath, optimizedPath, targetPos, simulationPhase, animationFrame, currentPath, startPos]);
 
   // Layout
   const layout = useMemo(() => ({
@@ -305,166 +305,196 @@ export default function TrajectoryViewer() {
   }), []);
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left Column: Visualization */}
-        <div className="lg:col-span-3 space-y-4">
-          <Card className="bg-black/20 backdrop-blur-sm border-white/10">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Orbit className="w-5 h-5 text-mission-orange" />
-                Lambert Trajectory Solver
-              </CardTitle>
-              <div className="flex gap-2">
-                <div className="flex items-center gap-2 mr-4">
-                  <span className="text-xs text-muted-foreground w-12">Speed</span>
-                  <Slider value={speed} onValueChange={setSpeed} max={100} min={1} step={1} className="w-24" />
-                </div>
-                <Button
-                  size="sm"
-                  variant={isPlaying ? "destructive" : "default"}
-                  disabled={isWeatherLoading}
-                  onClick={() => {
-                    // If mission ended (frame 100) or we want to restart
-                    if (animationFrame >= 100) {
-                      setAnimationFrame(0);
-                      setSimulationPhase('NOMINAL');
-                      setLogs([]);
-
-                      // DEBUG: Log Launch Context
-                      const loadedCount = notifications?.length || 0;
-                      if (isError) {
-                        addLog("CRITICAL", `[DEBUG] Weather Fetch Failed: ${error?.message}`);
-                      } else {
-                        addLog("INFO", `[DEBUG] Weather Data: ${loadedCount > 0 ? 'Loaded' : 'None'} (${loadedCount} alerts)`);
-                      }
-                      addLog("INFO", `[DEBUG] Launch Date: ${launchDate}`);
-
-                      setIsPlaying(true);
-                      return;
-                    }
-
-                    if (!isPlaying && simulationPhase === 'IDLE') {
-                      setSimulationPhase('NOMINAL');
-                      setAnimationFrame(0);
-
-                      // DEBUG: Log Launch Context on first start
-                      const loadedCount = notifications?.length || 0;
-                      if (isError) {
-                        addLog("CRITICAL", `[DEBUG] Weather Fetch Failed: ${error?.message}`);
-                      } else {
-                        addLog("INFO", `[DEBUG] Weather Data: ${loadedCount > 0 ? 'Loaded' : 'None'} (${loadedCount} alerts)`);
-                      }
-                      addLog("INFO", `[DEBUG] Launch Date: ${launchDate}`);
-                    }
-                    setIsPlaying(!isPlaying)
-                  }}>
-                  {isWeatherLoading ? (
-                    <span className="flex items-center gap-2">
-                      <Orbit className="w-4 h-4 animate-spin" /> Syncing...
-                    </span>
-                  ) : (
-                    <>
-                      {isPlaying ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-                      {animationFrame >= 100 ? "Restart Mission" : isPlaying ? "Pause" : "Simulate Mission"}
-                    </>
-                  )}
-                </Button>
+    <div className="flex flex-col h-[calc(100vh-8rem)] gap-4">
+      {/* 1. COMMAND BAR */}
+      <Card className="bg-black/40 backdrop-blur-md border-white/10 shrink-0">
+        <div className="p-3 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Orbit className="w-5 h-5 text-mission-orange" />
+              <div className="flex flex-col">
+                <span className="font-bold text-sm tracking-wider">LAMBERT SOLVER</span>
+                <span className="text-[10px] text-muted-foreground font-mono">ODIN-GNC-04</span>
               </div>
-            </CardHeader>
-            <CardContent className="h-[500px] bg-black/40 relative rounded-md overflow-hidden border border-white/5">
-              <Plot
-                data={plotData as any}
-                layout={layout as any}
-                useResizeHandler
-                className="w-full h-full"
-                config={{ displayModeBar: false }}
-              />
+            </div>
 
-              {/* Floating HUD Status */}
-              <div className="absolute top-4 right-4 flex flex-col gap-2">
-                <Badge variant="outline" className={`
-                             ${simulationPhase === 'NOMINAL' ? 'border-gray-500 text-gray-400' :
-                    simulationPhase === 'ANALYZING' ? 'border-yellow-500 text-yellow-500 animate-pulse' :
-                      simulationPhase === 'OPTIMIZED' ? 'border-green-500 text-green-500' : 'border-gray-700 text-gray-700'}
-                             bg-black/50 backdrop-blur
-                         `}>
-                  STATUS: {simulationPhase}
+            <div className="h-8 w-px bg-white/10 mx-2" />
+
+            <div className={`flex items-center gap-2 px-3 py-1 rounded-full border bg-black/50 ${simulationPhase === 'NOMINAL' ? 'border-gray-500 text-gray-400' :
+              simulationPhase === 'ANALYZING' ? 'border-yellow-500 text-yellow-500 animate-pulse' :
+                simulationPhase === 'OPTIMIZED' ? 'border-green-500 text-green-500' :
+                  'border-gray-700 text-gray-700'
+              }`}>
+              <Activity className="w-3 h-3" />
+              <span className="text-xs font-mono font-bold">{simulationPhase}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3 bg-white/5 px-3 py-1.5 rounded-md border border-white/5">
+              <Calendar className="w-3 h-3 text-muted-foreground" />
+              <input
+                type="datetime-local"
+                value={launchDate}
+                onChange={e => setLaunchDate(e.target.value)}
+                className="bg-transparent border-none text-xs font-mono focus:ring-0 p-0 text-white w-32"
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-mono text-muted-foreground uppercase">Sim Speed</span>
+              <Slider value={speed} onValueChange={setSpeed} max={100} min={1} step={1} className="w-24" />
+            </div>
+
+            <Button
+              size="sm"
+              className={`font-mono text-xs font-bold tracking-wide shadow-[0_0_15px_rgba(0,0,0,0.5)] ${isPlaying ? "bg-red-500 hover:bg-red-600 text-white" : "bg-mission-orange hover:bg-mission-orange/90 text-black"
+                }`}
+              disabled={isWeatherLoading}
+              onClick={() => {
+                if (animationFrame >= 100) {
+                  setAnimationFrame(0);
+                  setSimulationPhase('NOMINAL');
+                  setLogs([]);
+                  setIsPlaying(true);
+                  return;
+                }
+                if (!isPlaying && simulationPhase === 'IDLE') {
+                  setSimulationPhase('NOMINAL');
+                  setAnimationFrame(0);
+                  // Debug logs...
+                  const loadedCount = notifications?.length || 0;
+                  addLog("INFO", `[SYSTEM] Launch Sequence Initiated. Weather Data: ${loadedCount} alerts.`);
+                }
+                setIsPlaying(!isPlaying)
+              }}>
+              {isWeatherLoading ? (
+                <span className="flex items-center gap-2"><Orbit className="w-3 h-3 animate-spin" /> SYNCING...</span>
+              ) : (
+                <>
+                  {isPlaying ? <Pause className="w-3 h-3 mr-2" /> : <Play className="w-3 h-3 mr-2" />}
+                  {animationFrame >= 100 ? "RESTART MISSION" : isPlaying ? "ABORT / PAUSE" : "ENGAGE SIMULATION"}
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
+        {/* 2. VISUALIZATION CORE (75%) */}
+        <Card className="lg:col-span-3 bg-black/60 backdrop-blur-sm border-white/10 relative overflow-hidden flex flex-col">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.03),transparent_70%)] pointer-events-none" />
+          <CardContent className="flex-1 p-0 relative">
+            <Plot
+              data={plotData as any}
+              layout={layout as any}
+              useResizeHandler
+              className="w-full h-full"
+              config={{ displayModeBar: false, responsive: true }}
+            />
+
+            {/* Floating HUD Elements */}
+            <div className="absolute bottom-4 left-4 p-3 rounded-lg bg-black/70 border border-white/10 backdrop-blur-md">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-muted-foreground font-mono uppercase">Telemetry</span>
+                <div className="flex gap-4">
+                  <div>
+                    <span className="text-[10px] text-gray-500 block">ALTITUDE</span>
+                    <span className="text-sm font-mono text-blue-400">{(currentPath[animationFrame]?.x || 0).toFixed(0)} km</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-gray-500 block">VELOCITY</span>
+                    <span className="text-sm font-mono text-blue-400">{(Math.random() * 2 + 10).toFixed(2)} km/s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 3. TELEMETRY DECK (25%) */}
+        <div className="space-y-4 flex flex-col h-full overflow-hidden">
+
+          {/* Module A: Environment */}
+          <Card className={`shrink-0 border bg-black/40 backdrop-blur ${trueRiskContext.risk.riskLevel === 'Low' ? 'border-success-green/30' : 'border-critical-red/50'}`}>
+            <CardHeader className="py-3 px-4 border-b border-white/5">
+              <CardTitle className="text-xs font-mono uppercase tracking-wider flex items-center gap-2">
+                <ShieldAlert className="w-3 h-3" />
+                Environment Scan
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">Solar Activity</span>
+                <Badge variant="outline" className={`text-[10px] ${trueRiskContext.constraint.solarFlare ? 'text-red-400 border-red-500' : 'text-green-400 border-green-900'}`}>
+                  {trueRiskContext.constraint.solarFlare ? "FLARE DETECTED" : "NOMINAL"}
                 </Badge>
               </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">Radiation Flux</span>
+                <Badge variant="outline" className={`text-[10px] ${trueRiskContext.constraint.radiationFlux > 50 ? 'text-red-400 border-red-500' : 'text-green-400 border-green-900'}`}>
+                  {trueRiskContext.constraint.radiationFlux}%
+                </Badge>
+              </div>
+              <div className="h-px bg-white/10 my-2" />
+              <p className={`text-xs font-mono leading-tight ${trueRiskContext.risk.riskLevel === 'Low' ? 'text-gray-400' : 'text-red-400'}`}>
+                {trueRiskContext.risk.message}
+              </p>
             </CardContent>
           </Card>
 
-          {/* Transparency Logs */}
-          <Card className="bg-black/20 backdrop-blur-sm border-white/10">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <Terminal className="w-4 h-4 text-primary" />
-                Decision Transparency Logs (Live Neural Stream)
+          {/* Module B: Flight Computer */}
+          <Card className="shrink-0 bg-black/40 backdrop-blur border-white/10">
+            <CardHeader className="py-3 px-4 border-b border-white/5">
+              <CardTitle className="text-xs font-mono uppercase tracking-wider flex items-center gap-2">
+                <Calculator className="w-3 h-3" />
+                Flight Computer
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[200px] w-full rounded-md border border-white/10 bg-black/50 p-4 font-mono text-xs">
-                {logs.length === 0 && <span className="text-muted-foreground italic">System Idle. Awaiting simulation start...</span>}
-                {logs.map((log, i) => (
-                  <div key={i} className="mb-2">
-                    <span className="text-muted-foreground opacity-50">[{log.timestamp}]</span>
-                    <span className={`font-bold ml-2 ${log.type === 'INFO' ? 'text-blue-400' :
-                      log.type === 'WARN' ? 'text-yellow-400' :
-                        log.type === 'CRITICAL' ? 'text-red-500 animate-pulse' :
-                          log.type === 'DECISION' ? 'text-purple-400' :
-                            'text-green-400'
-                      }`}>[{log.type}]</span>
-                    <span className="text-gray-300 ml-2">{log.message}</span>
-                  </div>
-                ))}
-              </ScrollArea>
+            <CardContent className="p-4 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[10px] text-muted-foreground block mb-1">DELTA-V EST</span>
+                  <span className="text-lg font-mono font-bold text-white">
+                    {calculateDeltaV({ x: 10, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, startPos, targetPos).toFixed(2)}
+                  </span>
+                  <span className="text-[10px] text-gray-500 ml-1">km/s</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block mb-1">WINDOW</span>
+                  <span className="text-lg font-mono font-bold text-white">72</span>
+                  <span className="text-[10px] text-gray-500 ml-1">HRS</span>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" className="w-full text-[10px] h-6 border-white/10 hover:bg-white/5" onClick={() => setLogs([])}>
+                PURGE LOGS
+              </Button>
             </CardContent>
           </Card>
-        </div>
 
-        {/* Right Column: Controls & Metrics */}
-        <div className="space-y-6">
-          <Card className="bg-black/20 border-white/10">
-            <CardContent className="pt-6 space-y-6">
-              <div className={`p-4 rounded-lg border ${trueRiskContext.risk.riskLevel === 'Low' ? 'bg-success-green/10 border-success-green/20' : 'bg-critical-red/10 border-critical-red/20'}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  {trueRiskContext.risk.riskLevel === 'Low' ? <ShieldAlert className="w-4 h-4 text-success-green" /> : <AlertTriangle className="w-4 h-4 text-critical-red" />}
-                  <span className="font-semibold text-sm">Environment Forecast</span>
-                </div>
-                <p className="text-xs text-muted-foreground">{trueRiskContext.risk.message}</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Launch Window</Label>
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <Input type="datetime-local" value={launchDate} onChange={e => setLaunchDate(e.target.value)} className="bg-white/5" />
-                </div>
-              </div>
-
-              <div className="p-4 rounded-lg bg-white/5 space-y-2 text-sm font-mono">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Active Protocol:</span>
-                  <span className={simulationPhase === 'OPTIMIZED' ? "text-success-green" : "text-gray-400"}>
-                    {simulationPhase === 'IDLE' ? "STANDBY" : simulationPhase}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Est. Delta V:</span>
-                  <span>{calculateDeltaV(
-                    { x: 10, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, startPos, targetPos
-                  ).toFixed(2)} km/s</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Flight Time:</span>
-                  <span>72 Hours</span>
-                </div>
-                <div className="flex justify-between pt-2">
-                  <Button size="sm" variant="ghost" className="w-full text-xs" onClick={() => setLogs([])}>
-                    Clear Logs
-                  </Button>
-                </div>
+          {/* Module C: Neural Stream (Logs) */}
+          <Card className="flex-1 min-h-0 bg-black/40 backdrop-blur border-white/10 flex flex-col">
+            <CardHeader className="py-3 px-4 border-b border-white/5 shrink-0">
+              <CardTitle className="text-xs font-mono uppercase tracking-wider flex items-center gap-2">
+                <Terminal className="w-3 h-3 text-purple-400" />
+                Neural Stream
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 p-0 overflow-hidden relative">
+              <div className="absolute inset-0 p-3 overflow-auto font-mono text-[10px] space-y-1.5 scrollbar-hide">
+                {logs.length === 0 && <div className="text-gray-600 italic text-center mt-10">Waiting for telemetry...</div>}
+                {logs.map((log, i) => (
+                  <div key={i} className="flex gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                    <span className="text-gray-600 shrink-0">[{log.timestamp}]</span>
+                    <span className={`${log.type === 'INFO' ? 'text-blue-400' :
+                      log.type === 'WARN' ? 'text-yellow-400' :
+                        log.type === 'CRITICAL' ? 'text-red-500 font-bold' :
+                          log.type === 'DECISION' ? 'text-purple-400' : 'text-green-400'
+                      }`}>{log.message}</span>
+                  </div>
+                ))}
+                {/* Anchor for auto-scroll could go here */}
               </div>
             </CardContent>
           </Card>
