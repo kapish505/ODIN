@@ -4,72 +4,46 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { 
-  Brain, 
-  MessageSquare, 
-  TrendingUp, 
-  TrendingDown, 
-  Clock, 
+import {
+  Brain,
+  MessageSquare,
+  TrendingUp,
+  TrendingDown,
+  Clock,
   Fuel,
   Timer,
   Shield
 } from "lucide-react"
 
 //todo: remove mock data
-const mockDecisions = [
-  {
-    id: "DEC-001",
-    timestamp: "2024-03-15T14:30:00Z",
-    threatDetected: "Solar flare (X9.3 class)",
-    originalTrajectory: "Direct Hohmann transfer",
-    selectedTrajectory: "L1 Lagrange point route",
-    reasoning: "Rerouting via L1 Lagrange point reduces radiation exposure by 90% with only 6-hour delay. The trade-off analysis shows significantly improved crew safety while maintaining acceptable mission timeline.",
-    tradeOffs: {
-      fuelCost: "+12%",
-      travelTime: "+6 hours", 
-      radiationReduction: "-90%",
-      safetyScore: "+45%"
-    },
-    status: "Implemented",
-    confidence: 94
-  },
-  {
-    id: "DEC-002", 
-    timestamp: "2024-03-14T09:15:00Z",
-    threatDetected: "Space debris field (>10cm objects)",
-    originalTrajectory: "Standard LEO departure",
-    selectedTrajectory: "Modified inclination change",
-    reasoning: "Debris collision probability exceeded 1:1000 threshold. Implemented 2.3° inclination adjustment during LEO phase to avoid high-density debris region. Maneuver requires minimal ΔV while ensuring safe corridor.",
-    tradeOffs: {
-      fuelCost: "+3%",
-      travelTime: "+45 minutes",
-      collisionRisk: "-85%", 
-      safetyScore: "+30%"
-    },
-    status: "Completed",
-    confidence: 98
-  },
-  {
-    id: "DEC-003",
-    timestamp: "2024-03-13T18:45:00Z", 
-    threatDetected: "Communication blackout prediction",
-    originalTrajectory: "Lunar polar approach",
-    selectedTrajectory: "Equatorial insertion with relay",
-    reasoning: "Solar storm predicted during critical insertion phase would cause 4-hour communication blackout. Alternative trajectory maintains ground contact via relay satellite, enabling real-time monitoring during LOI burn.",
-    tradeOffs: {
-      fuelCost: "+8%",
-      travelTime: "+2 hours",
-      communicationUptime: "+100%",
-      safetyScore: "+25%"
-    },
-    status: "Active",
-    confidence: 89
-  }
-]
+interface Decision {
+  id: number;
+  timestamp: string;
+  threatDetected: string;
+  originalTrajectory: string;
+  selectedTrajectory: string;
+  reasoning: string;
+  tradeOffs: Record<string, string>;
+  status: string;
+  confidence: number;
+}
+
+import { useQuery } from "@tanstack/react-query"
+import { apiRequest } from "@/lib/queryClient"
 
 export default function DecisionLog() {
-  const [selectedDecision, setSelectedDecision] = useState<string | null>(null)
+  const [selectedDecision, setSelectedDecision] = useState<number | null>(null)
   const [feedback, setFeedback] = useState("")
+
+  const { data: decisionsData } = useQuery<Decision[]>({
+    queryKey: ["/api/ai/decisions"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/ai/decisions");
+      return res.json();
+    }
+  });
+
+  const decisions = decisionsData || [];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -85,7 +59,7 @@ export default function DecisionLog() {
     switch (key) {
       case "fuelCost": return Fuel
       case "travelTime": return Timer
-      case "radiationReduction": 
+      case "radiationReduction":
       case "collisionRisk": return Shield
       case "safetyScore": return TrendingUp
       default: return TrendingUp
@@ -117,7 +91,7 @@ export default function DecisionLog() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-mission-orange">12</div>
+              <div className="text-2xl font-bold text-mission-orange">{decisions.length}</div>
               <div className="text-sm text-muted-foreground">Total Decisions</div>
             </div>
             <div className="text-center">
@@ -134,15 +108,17 @@ export default function DecisionLog() {
 
       {/* Decision Log */}
       <div className="space-y-4">
-        {mockDecisions.map((decision) => {
+        {decisions.length === 0 && (
+          <div className="text-center p-8 text-muted-foreground">No AI decisions recorded via telemetry.</div>
+        )}
+        {decisions.map((decision) => {
           const isSelected = selectedDecision === decision.id
-          
+
           return (
-            <Card 
+            <Card
               key={decision.id}
-              className={`hover-elevate cursor-pointer transition-all ${
-                isSelected ? 'ring-2 ring-mission-orange' : ''
-              }`}
+              className={`hover-elevate cursor-pointer transition-all ${isSelected ? 'ring-2 ring-mission-orange' : ''
+                }`}
               onClick={() => {
                 setSelectedDecision(isSelected ? null : decision.id)
                 console.log(`${isSelected ? 'Collapsed' : 'Expanded'} decision: ${decision.id}`)
@@ -158,14 +134,14 @@ export default function DecisionLog() {
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <div className="font-semibold">Decision {decision.id}</div>
+                      <div className="font-semibold">Decision DEC-{decision.id}</div>
                       <div className="text-sm text-muted-foreground flex items-center gap-2">
                         <Clock className="w-4 h-4" />
-                        {new Date(decision.timestamp).toLocaleDateString()} {new Date(decision.timestamp).toLocaleTimeString()}
+                        {new Date(decision.timestamp).toLocaleDateString()}
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <div className="text-right text-sm">
                       <div className="font-mono font-bold">{decision.confidence}%</div>
@@ -177,7 +153,7 @@ export default function DecisionLog() {
                   </div>
                 </div>
               </CardHeader>
-              
+
               <CardContent className="pt-0">
                 <div className="space-y-4">
                   {/* Threat Summary */}
@@ -242,7 +218,7 @@ export default function DecisionLog() {
                           Implement Decision
                         </Button>
                         <Button size="sm" variant="outline" data-testid={`button-modify-${decision.id}`}>
-                          Modify Parameters  
+                          Modify Parameters
                         </Button>
                         <Button size="sm" variant="outline" data-testid={`button-export-${decision.id}`}>
                           Export Analysis
@@ -274,7 +250,7 @@ export default function DecisionLog() {
               className="min-h-[100px]"
               data-testid="textarea-feedback"
             />
-            <Button 
+            <Button
               onClick={submitFeedback}
               disabled={!feedback.trim()}
               className="bg-mission-orange hover:bg-mission-orange/90"

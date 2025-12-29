@@ -21,10 +21,22 @@ export const missions = pgTable("missions", {
 
 export const logs = pgTable("logs", {
   id: serial("id").primaryKey(),
-  timestamp: timestamp("timestamp").defaultNow().notNull(),
-  type: text("type").notNull(), // info, warn, error, decision
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  type: text("type").notNull(), // 'INFO', 'WARNING', 'ERROR', 'SUCCESS'
   message: text("message").notNull(),
-  meta: jsonb("meta"),
+  meta: jsonb("meta").$type<Record<string, any>>(),
+});
+
+export const decisions = pgTable("decisions", {
+  id: serial("id").primaryKey(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  threatDetected: text("threat_detected").notNull(),
+  originalTrajectory: text("original_trajectory").notNull(),
+  selectedTrajectory: text("selected_trajectory").notNull(),
+  reasoning: text("reasoning").notNull(),
+  tradeOffs: jsonb("trade_offs").notNull().$type<Record<string, string>>(),
+  status: text("status").notNull(), // 'Implemented', 'Active', 'Completed', 'Rejected'
+  confidence: integer("confidence").notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users);
@@ -33,6 +45,8 @@ export const insertMissionSchema = createInsertSchema(missions);
 export const selectMissionSchema = createSelectSchema(missions);
 export const insertLogSchema = createInsertSchema(logs);
 export const selectLogSchema = createSelectSchema(logs);
+export const insertDecisionSchema = createInsertSchema(decisions);
+export const selectDecisionSchema = createSelectSchema(decisions);
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;

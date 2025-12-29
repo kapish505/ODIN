@@ -120,6 +120,47 @@ export function solveLambert(r1: Vector3, r2: Vector3, dt: number, prograde = tr
 }
 
 /**
+ * Calculates the Delta-V required for the transfer.
+ * Assumes impulsive maneuvers at departure and arrival.
+ * @param v1 Departure velocity vector (km/s)
+ * @param v2 Arrival velocity vector (km/s)
+ * @param r1 Departure position (km)
+ * @param r2 Arrival position (km)
+ * @returns Total Delta-V (km/s)
+ */
+export function calculateDeltaV(v1: Vector3, v2: Vector3, r1: Vector3, r2: Vector3): number {
+    // Simplified assumption: 
+    // dV1 = |v1 - v_initial_orbit|
+    // dV2 = |v_final_orbit - v2|
+
+    // For Earth departure from LEO (Low Earth Orbit ~ 300km altitude):
+    // v_circ_earth = sqrt(mu_earth / r_park)
+    const r_earth = 6378; // km
+    const r_park = r_earth + 300; // Parking orbit
+    const v_park = Math.sqrt(398600.4418 / r_park);
+
+    // Using standard Earth Mean Orbital Speed
+    const v_earth_mean = 29.78;
+    const v_inf_dep = Math.abs(magnitude(v1) - v_earth_mean); // Rough approx of V_infinity
+    const dV_injection = Math.sqrt(Math.pow(v_inf_dep, 2) + (2 * 398600.4418 / r_park)) - v_park;
+
+    // Arrival at Moon (capture)
+    // Similar logic or just use the magnitude for braking if we stop (impulsive)
+    // For lunar capture, we want to match Moon's velocity.
+    // Moon mean orbital speed ~ 1.022 km/s
+    const v_moon_mean = 1.022;
+    const v_inf_arr = Math.abs(magnitude(v2) - v_moon_mean);
+    // Capture dV to 100km lunar orbit
+    const r_moon = 1737;
+    const r_capture = r_moon + 100;
+    const mu_moon = 4904.8695;
+    const v_park_moon = Math.sqrt(mu_moon / r_capture);
+    const dV_capture = Math.sqrt(Math.pow(v_inf_arr, 2) + (2 * mu_moon / r_capture)) - v_park_moon;
+
+    return dV_injection + dV_capture;
+}
+
+/**
  * Generates trajectory points for visualization
  */
 export function generateLambertTrajectory(r1: Vector3, r2: Vector3, points = 100): Vector3[] {
@@ -131,38 +172,26 @@ export function generateLambertTrajectory(r1: Vector3, r2: Vector3, points = 100
     // 2. Angle between vectors
     const r1Mag = magnitude(r1);
     const r2Mag = magnitude(r2);
-    const theta = Math.acos(dot(r1, r2) / (r1Mag * r2Mag));
+    // Clamp dot product to -1..1 to avoid NaN from acos due to float precision
+    const dotVal = Math.max(-1, Math.min(1, dot(r1, r2) / (r1Mag * r2Mag)));
+    const theta = Math.acos(dotVal);
 
-    // 3. Generate points along the arc (Slerp-like interpolation but elliptical)
-    // Simple elliptical path approximation:
-    // r(nu) = p / (1 + e*cos(nu))
-
-    // For visualization robustly:
-    // Linear interpolation of angle, adjusting radius to form an arc
-    // Assume r varies from r1 to r2 quadratically to simulate apogee/perigee effects?
-    // Actually, just a SLERP on the sphere and linear radius change is often "good enough" for "transfer" visual
-    // But specific "Lambert" means it follows Keplerian mechanics.
-
-    // Better approx: standard ellipse eq
+    // 3. Generate points along the arc
     const result: Vector3[] = [];
     for (let i = 0; i <= points; i++) {
         const t = i / points;
         const currentTheta = t * theta;
 
-        // Radius interpolation (Linear for now, can be improved)
+        // Radius interpolation (Simple Linear for visual connectivity)
         const currentR = r1Mag + (r2Mag - r1Mag) * t;
 
         // Rotate r1 by currentTheta around normal
-        // Rodrigues' rotation formula
-        // v_rot = v*cos(th) + (k x v)*sin(th) + k*(k.v)*(1-cos(th))
-        // k = normal, v = r1_unit
-
         const r1Unit = scale(r1, 1 / r1Mag);
         const kCrossV = cross(normal, r1Unit);
 
         const term1 = scale(r1Unit, Math.cos(currentTheta));
         const term2 = scale(kCrossV, Math.sin(currentTheta));
-        const term3 = scale(normal, dot(normal, r1Unit) * (1 - Math.cos(currentTheta))); // dot is 0 for normal
+        // term3 is 0 for orthogonal normal
 
         const dir = {
             x: term1.x + term2.x,
@@ -170,7 +199,60 @@ export function generateLambertTrajectory(r1: Vector3, r2: Vector3, points = 100
             z: term1.z + term2.z
         };
 
-        result.push(scale(dir, currentR)); // Visual arc
+        result.push(scale(dir, currentR));
     }
     return result;
 }
+
+/**
+ * Assess mission risk based on Space Weather constraints.
+ */
+export interface WeatherConstraint {
+    solarFlare: boolean; // Is there an active solar flare?
+    geomagneticStorm: boolean;
+    radiationFlux: number; // AP index or generic flux value
+}
+
+export function assessMissionRisk(constraint: WeatherConstraint, timeOfFlightDays: number): {
+    safe: boolean;
+    riskLevel: "Low" | "Medium" | "High" | "Critical";
+    color: string;
+    message: string;
+} {
+    // Real physics: Longer exposure (TOF) + High Flux = Danger
+
+    let riskScore = 0;
+    if (constraint.solarFlare) riskScore += 50;
+    if (constraint.geomagneticStorm) riskScore += 30;
+
+    // Time of flight penalty: Every day adds risk if flux is non-zero
+    if (timeOfFlightDays > 3) riskScore += 10;
+    if (timeOfFlightDays > 5) riskScore += 20;
+
+    let riskLevel: "Low" | "Medium" | "High" | "Critical" = "Low";
+
+    if (riskScore > 80) riskLevel = "Critical";
+    else if (riskScore > 50) riskLevel = "High";
+    else if (riskScore > 20) riskLevel = "Medium";
+
+    const colors = {
+        "Low": "#4ade80",      // green
+        "Medium": "#facc15",   // yellow
+        "High": "#fb923c",     // orange
+        "Critical": "#f87171"  // red
+    };
+
+    return {
+        safe: riskLevel === "Low" || riskLevel === "Medium",
+        riskLevel,
+        color: colors[riskLevel],
+        message: riskLevel === "Critical"
+            ? "ABORT: Lethal radiation levels detected for this duration."
+            : riskLevel === "High"
+                ? "WARNING: High radiation dose expected. Shielding required."
+                : "Nominal mission parameters."
+    };
+}
+
+
+

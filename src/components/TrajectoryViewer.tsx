@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react"
+import { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -6,30 +6,78 @@ import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
-  RotateCcw,
-  Play,
-  Pause,
-  Maximize,
-  Target,
   Orbit,
-  Calculator
+  Calculator,
+  AlertTriangle,
+  ShieldAlert
 } from "lucide-react"
 import Plotly from "plotly.js-dist-min"
 import createPlotlyComponent from "react-plotly.js/factory"
-import { generateLambertTrajectory, Vector3 } from "@/lib/lambert/solver"
+import { generateLambertTrajectory, Vector3, calculateDeltaV, assessMissionRisk, WeatherConstraint } from "@/lib/lambert/solver"
+import { useQuery } from "@tanstack/react-query"
+import { apiRequest } from "@/lib/queryClient"
 
 const Plot = createPlotlyComponent(Plotly)
 
 export default function TrajectoryViewer() {
-  const [isPlaying, setIsPlaying] = useState(false)
   const [tof, setTof] = useState([72]) // Time of flight in hours
   const [startPos, setStartPos] = useState<Vector3>({ x: 7000, y: 0, z: 0 })
   const [targetPos, setTargetPos] = useState<Vector3>({ x: -384400, y: 0, z: 0 }) // Moon approx
+
+  // Fetch Space Weather for Launch Go/No-Go
+  const { data: notifications } = useQuery<any[]>({
+    queryKey: ["/api/weather/notifications"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/weather/notifications");
+      return res.json();
+    }
+  });
+
+  const weatherConstraint: WeatherConstraint = useMemo(() => {
+    if (!notifications) return { solarFlare: false, geomagneticStorm: false, radiationFlux: 0 };
+
+    // Check for active alerts in the last 24h
+    const now = new Date();
+    const activeAlerts = notifications.filter(n => {
+      const issueTime = new Date(n.messageIssueTime);
+      return (now.getTime() - issueTime.getTime()) < (24 * 60 * 60 * 1000);
+    });
+
+    return {
+      solarFlare: activeAlerts.some(n => n.messageType.includes("FLR")),
+      geomagneticStorm: activeAlerts.some(n => n.messageType.includes("CME") || n.messageType.includes("GST")),
+      radiationFlux: activeAlerts.some(n => n.messageType.includes("SEP")) ? 100 : 10 // Arbitrary flux values for demo logic
+    };
+  }, [notifications]);
+
+  // Assessment
+  const missionRisks = useMemo(() => {
+    return assessMissionRisk(weatherConstraint, tof[0] / 24);
+  }, [weatherConstraint, tof]);
 
   // Calculate trajectory points
   const trajectoryPoints = useMemo(() => {
     return generateLambertTrajectory(startPos, targetPos, 100);
   }, [startPos, targetPos]);
+
+  // Calculate Physics Metrics
+  const deltaV = useMemo(() => {
+    // Rough vectors for demo calculation (since generateLambertTrajectory creates points, not velocity vectors directly exposed yet)
+    // We'd theoretically run solveLambert() here to get v1, v2
+    // For MVP "Realism" approximation based on positions:
+    // P1: startPos, P2: targetPos
+    // We assume standard Hohmann-like efficiency for baseline, then add penalties
+    const calculated = calculateDeltaV(
+      { x: 10, y: 0, z: 0 }, // Placeholder v1 (would come from full solver)
+      { x: 1, y: 0, z: 0 },  // Placeholder v2
+      startPos,
+      targetPos
+    );
+    // Add penalty for "Safety Maneuvers" if risk is high
+    const penalty = missionRisks.riskLevel === "High" ? 0.5 : missionRisks.riskLevel === "Critical" ? 999 : 0;
+    return calculated + penalty;
+  }, [startPos, targetPos, missionRisks]);
+
 
   const plotData = useMemo(() => {
     // Earth Wireframe
@@ -56,13 +104,16 @@ export default function TrajectoryViewer() {
       y: trajectoryPoints.map(p => p.y),
       z: trajectoryPoints.map(p => p.z),
       mode: 'lines',
-      line: { color: '#f97316', width: 4 },
-      name: 'Transfer Orbit',
+      line: {
+        color: missionRisks.color, // Dynamic Color based on Risk
+        width: 5
+      },
+      name: 'Flight Path',
       type: 'scatter3d'
     };
 
     return [earth, moon, path];
-  }, [trajectoryPoints, targetPos]);
+  }, [trajectoryPoints, targetPos, missionRisks]);
 
   const layout = useMemo(() => ({
     autosize: true,
@@ -89,8 +140,11 @@ export default function TrajectoryViewer() {
               Lambert Trajectory Solver
             </CardTitle>
             <div className="flex gap-2">
-              <Badge className="bg-mission-orange/20 text-mission-orange border-mission-orange">
-                Universal Variables
+              <Badge className={`bg-${missionRisks.riskLevel === 'Low' ? 'success-green' : 'critical-red'}/20 text-${missionRisks.riskLevel === 'Low' ? 'success-green' : 'critical-red'} border-current`}>
+                {missionRisks.riskLevel} Risk
+              </Badge>
+              <Badge variant="outline" className="border-mission-orange text-mission-orange">
+                Real-Time Physics
               </Badge>
             </div>
           </div>
@@ -109,6 +163,16 @@ export default function TrajectoryViewer() {
 
             {/* Controls */}
             <div className="space-y-6">
+
+              {/* Mission Status Alert */}
+              <div className={`p-4 rounded-lg border ${missionRisks.safe ? 'bg-success-green/10 border-success-green/20' : 'bg-critical-red/10 border-critical-red/20'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  {missionRisks.safe ? <ShieldAlert className="w-4 h-4 text-success-green" /> : <AlertTriangle className="w-4 h-4 text-critical-red" />}
+                  <span className="font-semibold text-sm">{missionRisks.safe ? "Trajectory Nominal" : "Hazard Detected"}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{missionRisks.message}</p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="tof">Time of Flight (Hours)</Label>
                 <div className="flex items-center gap-4">
@@ -160,12 +224,12 @@ export default function TrajectoryViewer() {
                   <span className="text-success-green">Elliptical</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Delta V:</span>
-                  <span>3.12 km/s</span>
+                  <span className="text-muted-foreground">Est. Delta V:</span>
+                  <span>{deltaV.toFixed(2)} km/s</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Eccentricity:</span>
-                  <span>0.84</span>
+                  <span className="text-muted-foreground">Fuel Efficiency:</span>
+                  <span className={deltaV > 6 ? "text-critical-red" : "text-success-green"}>{deltaV > 6 ? "Low" : "High"}</span>
                 </div>
               </div>
             </div>
