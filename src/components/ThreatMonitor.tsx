@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -9,195 +9,211 @@ import {
   Satellite,
   Radiation,
   CheckCircle,
-  Clock,
-  Loader2
+  Loader2,
+  WifiOff,
+  RefreshCw
 } from "lucide-react"
-import { useQuery } from "@tanstack/react-query"
-import { apiRequest } from "@/lib/queryClient"
 
 interface Threat {
   activityID: string;
-  messageType: string;
-  messageBody: string;
-  messageIssueTime: string;
+  messageType?: string; // Optional to prevent crash
+  messageBody?: string;
+  messageIssueTime?: string;
 }
 
 export default function ThreatMonitor() {
   const [selectedThreat, setSelectedThreat] = useState<string | null>(null)
-  const [alertsEnabled, setAlertsEnabled] = useState(true)
+  const [threats, setThreats] = useState<Threat[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const { data: notifications, isLoading, error } = useQuery<Threat[]>({
-    queryKey: ["/api/weather/notifications"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/weather/notifications");
-      return res.json();
+  const fetchThreats = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // 8-second timeout for fetch
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+      const res = await fetch("/api/weather/notifications", { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setThreats(data);
+      } else {
+        setThreats([]);
+      }
+    } catch (err) {
+      console.warn("[ThreatMonitor] Fetch failed:", err);
+      setError("Unable to reach Deep Space Network.");
+    } finally {
+      setLoading(false);
     }
-  });
+  };
 
-  const threats = notifications || [];
+  useEffect(() => {
+    fetchThreats();
+  }, []);
 
-  // Calculate dynamic stats
+  // Safe Accessors
   const activeCount = threats.length;
   const overallStatus = activeCount > 5 ? "Critical" : activeCount > 2 ? "Elevated" : "Nominal";
   const threatLevel = activeCount > 5 ? "High" : activeCount > 2 ? "Medium" : "Low";
 
   const getSeverityColor = (type?: string) => {
     if (!type) return "neutral-gray";
-    if (type.includes("FLR") || type.includes("CME")) return "warning-amber";
-    if (type.includes("SEP")) return "critical-red";
+    const t = type.toUpperCase();
+    if (t.includes("FLR") || t.includes("CME")) return "warning-amber";
+    if (t.includes("SEP")) return "critical-red";
     return "success-green";
   }
 
   const getThreatIcon = (type?: string) => {
     if (!type) return AlertTriangle;
-    if (type.includes("FLR")) return Zap;       // Solar Flare
-    if (type.includes("CME")) return Radiation; // Coronal Mass Ejection
-    if (type.includes("SEP")) return Satellite; // Solar Energetic Particle
+    const t = type.toUpperCase();
+    if (t.includes("FLR")) return Zap;
+    if (t.includes("CME")) return Radiation;
+    if (t.includes("SEP")) return Satellite;
     return AlertTriangle;
   }
 
-  const parseImpact = (body: string) => {
-    // Simple extraction of summary or first sentence for UI
-    const summary = body.split("## Summary:")[1]?.split("\n")[1] || body.substring(0, 100) + "...";
-    return summary.trim();
-  }
-
-  if (isLoading) {
+  // Loading State
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-mission-orange" />
-        <span className="ml-2 text-muted-foreground">Scanning deep space network...</span>
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <Loader2 className="w-12 h-12 animate-spin text-mission-orange" />
+        <div className="flex flex-col items-center">
+          <span className="text-mission-orange font-mono tracking-widest text-lg">SCANNING SECTOR</span>
+          <span className="text-xs text-muted-foreground">Est. Latency: 1.2s</span>
+        </div>
       </div>
     )
   }
 
+  // Error State
   if (error) {
     return (
-      <div className="flex items-center justify-center h-96 text-critical-red">
-        <AlertTriangle className="w-8 h-8 mr-2" />
-        <span>Failed to connect to NASA Deep Space Network.</span>
+      <div className="flex flex-col items-center justify-center h-96 gap-4 text-center">
+        <div className="bg-red-500/10 p-6 rounded-full border border-red-500/50">
+          <WifiOff className="w-12 h-12 text-red-500" />
+        </div>
+        <div>
+          <h3 className="text-xl font-bold text-white mb-2">UPLINK LOST</h3>
+          <p className="text-muted-foreground w-64 mx-auto">{error}</p>
+        </div>
+        <Button onClick={fetchThreats} variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10">
+          <RefreshCw className="w-4 h-4 mr-2" />
+          RETRY CONNECTION
+        </Button>
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Threat Overview */}
+      {/* HUD Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card data-testid="card-overall-status">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Overall Status</p>
-                <p className={`text-2xl font-bold ${overallStatus === "Nominal" ? "text-success-green" : "text-warning-amber"}`}>
-                  {overallStatus}
-                </p>
-              </div>
-              <CheckCircle className={`w-8 h-8 ${overallStatus === "Nominal" ? "text-success-green" : "text-warning-amber"}`} />
+        <Card className="bg-black/40 backdrop-blur border-white/10">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-mono uppercase text-muted-foreground mb-1">System Status</p>
+              <p className={`text-2xl font-bold font-display tracking-wider ${overallStatus === "Nominal" ? "text-green-400" : "text-yellow-400"}`}>
+                {overallStatus.toUpperCase()}
+              </p>
             </div>
+            <CheckCircle className={`w-8 h-8 opacity-50 ${overallStatus === "Nominal" ? "text-green-400" : "text-yellow-400"}`} />
           </CardContent>
         </Card>
 
-        <Card data-testid="card-active-threats">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Active Notifications</p>
-                <p className="text-2xl font-bold text-warning-amber">{activeCount}</p>
-              </div>
-              <Shield className="w-8 h-8 text-warning-amber" />
+        <Card className="bg-black/40 backdrop-blur border-white/10">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-mono uppercase text-muted-foreground mb-1">Active Alerts</p>
+              <p className="text-2xl font-bold font-display tracking-wider text-white">
+                {activeCount.toString().padStart(2, '0')}
+              </p>
             </div>
+            <Shield className="w-8 h-8 text-blue-400 opacity-50" />
           </CardContent>
         </Card>
 
-        <Card data-testid="card-threat-level">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Threat Level</p>
-                <p className="text-2xl font-bold text-warning-amber">{threatLevel}</p>
-              </div>
-              <AlertTriangle className="w-8 h-8 text-warning-amber" />
+        <Card className="bg-black/40 backdrop-blur border-white/10">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-mono uppercase text-muted-foreground mb-1">Radiation Index</p>
+              <p className="text-2xl font-bold font-display tracking-wider text-mission-orange">
+                {threatLevel.toUpperCase()}
+              </p>
             </div>
+            <Radiation className="w-8 h-8 text-mission-orange opacity-50" />
           </CardContent>
         </Card>
       </div>
 
-      {/* Active Threats */}
-      <Card>
-        <CardHeader>
+      {/* Main Feed */}
+      <Card className="bg-black/60 backdrop-blur border-white/10 flex-1">
+        <CardHeader className="border-b border-white/5 py-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-mission-orange" />
-              Live Space Weather Feed (NASA DONKI)
+            <CardTitle className="text-sm font-mono uppercase tracking-widest flex items-center gap-2">
+              <Zap className="w-4 h-4 text-yellow-400" />
+              Telescope Telemetry (NASA DONKI)
             </CardTitle>
-            <Button
-              variant={alertsEnabled ? "default" : "outline"}
-              size="sm"
-              onClick={() => setAlertsEnabled(!alertsEnabled)}
-            >
-              {alertsEnabled ? "Alerts On" : "Alerts Off"}
+            <Button size="sm" variant="ghost" onClick={fetchThreats} className="h-8 w-8 p-0">
+              <RefreshCw className="w-4 h-4" />
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+        <CardContent className="p-0">
+          <div className="divide-y divide-white/5">
             {activeCount === 0 && (
-              <div className="text-center p-8 text-muted-foreground">No active space weather alerts reported.</div>
+              <div className="p-12 text-center">
+                <Shield className="w-12 h-12 text-green-500/20 mx-auto mb-4" />
+                <p className="text-gray-400 font-mono">No active threats detected in local quadrant.</p>
+              </div>
             )}
             {threats.map((threat) => {
               const ThreatIcon = getThreatIcon(threat.messageType)
               const isSelected = selectedThreat === threat.activityID
               const severityColor = getSeverityColor(threat.messageType);
+              const dateObj = threat.messageIssueTime ? new Date(threat.messageIssueTime) : new Date();
 
               return (
-                <div key={threat.activityID}>
-                  <Card
-                    className={`hover-elevate cursor-pointer transition-all ${isSelected ? 'ring-2 ring-mission-orange' : ''
-                      }`}
-                    onClick={() => setSelectedThreat(isSelected ? null : threat.activityID)}
-                    data-testid={`threat-${threat.activityID}`}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <ThreatIcon className="w-5 h-5 text-mission-orange" />
-                          <div>
-                            <div className="font-semibold">{threat.messageType}</div>
-                            <div className="text-sm text-muted-foreground">ID: {threat.activityID.substring(0, 15)}...</div>
-                          </div>
-                        </div>
+                <div
+                  key={threat.activityID}
+                  className={`p-4 transition-colors hover:bg-white/5 cursor-pointer ${isSelected ? "bg-white/5" : ""}`}
+                  onClick={() => setSelectedThreat(isSelected ? null : threat.activityID)}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className={`p-2 rounded-md bg-${severityColor}/10 shrink-0`}>
+                      <ThreatIcon className={`w-5 h-5 text-${severityColor}`} />
+                    </div>
 
-                        <div className="flex items-center gap-4">
-                          <div className="text-center hidden md:block">
-                            <div className="text-sm text-muted-foreground">Issued</div>
-                            <div className="font-mono font-bold text-sm">
-                              {new Date(threat.messageIssueTime).toLocaleDateString()}
-                            </div>
-                          </div>
-
-                          <Badge className={`bg-${severityColor}/20 text-${severityColor}`}>
-                            Active
-                          </Badge>
-                        </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="font-bold text-white text-sm truncate pr-4">
+                          {threat.messageType || "UNKNOWN ANOMALY"}
+                        </h4>
+                        <span className="text-[10px] font-mono text-gray-500 shrink-0">
+                          {dateObj.toLocaleDateString()} {dateObj.toLocaleTimeString()}
+                        </span>
                       </div>
 
-                      {isSelected && (
-                        <div className="mt-4 pt-4 border-t space-y-3">
-                          <div>
-                            <div className="text-sm font-medium text-muted-foreground mb-1">NASA Report Summary</div>
-                            <div className="text-sm whitespace-pre-line">{parseImpact(threat.messageBody)}</div>
-                          </div>
+                      <p className="text-xs text-gray-400 line-clamp-1 font-mono">
+                        ID: {threat.activityID}
+                      </p>
 
-                          <div className="flex gap-2">
-                            <Button size="sm" className="bg-mission-orange hover:bg-mission-orange/90">
-                              Assess Impact
-                            </Button>
-                          </div>
+                      {isSelected && (
+                        <div className="mt-4 pt-4 border-t border-white/5 animate-in fade-in slide-in-from-top-2">
+                          <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+                            {threat.messageBody || "No details provided."}
+                          </p>
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </div>
               )
             })}

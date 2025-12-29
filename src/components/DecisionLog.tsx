@@ -1,21 +1,27 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Brain,
-  MessageSquare,
   TrendingUp,
-  TrendingDown,
+  AlertTriangle,
+  CheckCircle,
   Clock,
-  Fuel,
-  Timer,
-  Shield
+  GitBranch,
+  Terminal,
+  Activity
 } from "lucide-react"
 
-//todo: remove mock data
+interface TradeOffs {
+  fuelCost?: string;
+  travelTime?: string;
+  radiationReduction?: string;
+  safetyScore?: string;
+  collisionRisk?: string;
+  powerDraw?: string;
+  [key: string]: string | undefined;
+}
+
 interface Decision {
   id: number;
   timestamp: string;
@@ -23,243 +29,193 @@ interface Decision {
   originalTrajectory: string;
   selectedTrajectory: string;
   reasoning: string;
-  tradeOffs: Record<string, string>;
+  tradeOffs: TradeOffs;
   status: string;
   confidence: number;
 }
 
-import { useQuery } from "@tanstack/react-query"
-import { apiRequest } from "@/lib/queryClient"
-
 export default function DecisionLog() {
-  const [selectedDecision, setSelectedDecision] = useState<number | null>(null)
-  const [feedback, setFeedback] = useState("")
+  const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const { data: decisionsData } = useQuery<Decision[]>({
-    queryKey: ["/api/ai/decisions"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/ai/decisions");
-      return res.json();
+  useEffect(() => {
+    async function fetchDecisions() {
+      try {
+        const res = await fetch("/api/ai/decisions");
+        if (!res.ok) throw new Error("Failed to fetch");
+        const data = await res.json();
+        setDecisions(data);
+        if (data.length > 0) setSelectedId(data[0].id);
+      } catch (e) {
+        console.error("Failed to load decisions", e);
+      } finally {
+        setLoading(false);
+      }
     }
-  });
+    fetchDecisions();
+  }, []);
 
-  const decisions = decisionsData || [];
+  const activeDecision = decisions.find(d => d.id === selectedId) || decisions[0];
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Implemented": return "success-green"
-      case "Active": return "mission-orange"
-      case "Completed": return "space-blue"
-      case "Rejected": return "critical-red"
-      default: return "neutral-gray"
-    }
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="flex flex-col items-center gap-4">
+          <Brain className="w-12 h-12 animate-pulse text-purple-400" />
+          <span className="text-muted-foreground font-mono">Deciphering Neural Logs...</span>
+        </div>
+      </div>
+    )
   }
 
-  const getTradeOffIcon = (key: string) => {
-    switch (key) {
-      case "fuelCost": return Fuel
-      case "travelTime": return Timer
-      case "radiationReduction":
-      case "collisionRisk": return Shield
-      case "safetyScore": return TrendingUp
-      default: return TrendingUp
-    }
-  }
-
-  const getTradeOffColor = (value: string) => {
-    if (value.startsWith('+') && (value.includes('Cost') || value.includes('Time'))) return "critical-red"
-    if (value.startsWith('-') && (value.includes('Reduction') || value.includes('Risk'))) return "success-green"
-    if (value.startsWith('+') && value.includes('Score')) return "success-green"
-    return "mission-orange"
-  }
-
-  const submitFeedback = () => {
-    console.log('Submitting AI decision feedback:', feedback)
-    setFeedback("")
+  if (decisions.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-12 text-center text-muted-foreground">
+          No autonomous decisions recorded in log.
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="w-5 h-5 text-mission-orange" />
-            AI Decision History & Analysis
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-12rem)]">
+      {/* Left Panel: Decision History (Timeline) */}
+      <Card className="lg:col-span-4 flex flex-col h-full bg-black/40 backdrop-blur border-white/10">
+        <CardHeader className="py-4 border-b border-white/5 bg-black/20">
+          <CardTitle className="text-sm font-mono uppercase tracking-widest text-gray-400 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-mission-orange" />
+            Decision Timeline
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-mission-orange">{decisions.length}</div>
-              <div className="text-sm text-muted-foreground">Total Decisions</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-success-green">94%</div>
-              <div className="text-sm text-muted-foreground">Success Rate</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-space-blue">2.3s</div>
-              <div className="text-sm text-muted-foreground">Avg Response Time</div>
-            </div>
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+          <div className="space-y-3">
+            {decisions.map((decision) => (
+              <div
+                key={decision.id}
+                onClick={() => setSelectedId(decision.id)}
+                className={`p-4 rounded-lg cursor-pointer transition-all border group relative overflow-hidden ${selectedId === decision.id
+                    ? "bg-purple-500/10 border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.2)]"
+                    : "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/10"
+                  }`}
+              >
+                <div className="flex justify-between items-start mb-2 relative z-10">
+                  <Badge variant="outline" className={`${decision.status === "EXECUTING" ? "text-purple-400 border-purple-400/50 animate-pulse" :
+                      "text-green-400 border-green-400/50"
+                    }`}>
+                    {decision.status}
+                  </Badge>
+                  <span className="text-xs font-mono text-gray-500 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {new Date(decision.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <h4 className="font-bold text-sm text-gray-200 mb-2 relative z-10 font-display">{decision.threatDetected}</h4>
+                <div className="flex items-center gap-2 text-xs text-gray-400 relative z-10">
+                  <GitBranch className="w-3 h-3 text-purple-400" />
+                  <span className="font-mono truncate">{decision.selectedTrajectory}</span>
+                </div>
+                {/* Active Indicator Bar */}
+                {selectedId === decision.id && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-500" />
+                )}
+              </div>
+            ))}
           </div>
-        </CardContent>
+        </div>
       </Card>
 
-      {/* Decision Log */}
-      <div className="space-y-4">
-        {decisions.length === 0 && (
-          <div className="text-center p-8 text-muted-foreground">No AI decisions recorded via telemetry.</div>
-        )}
-        {decisions.map((decision) => {
-          const isSelected = selectedDecision === decision.id
+      {/* Right Panel: Detailed Analysis */}
+      <Card className="lg:col-span-8 flex flex-col h-full bg-black/60 backdrop-blur border-white/10 overflow-hidden relative">
+        {activeDecision ? (
+          <div className="flex flex-col h-full overflow-y-auto custom-scrollbar">
 
-          return (
-            <Card
-              key={decision.id}
-              className={`hover-elevate cursor-pointer transition-all ${isSelected ? 'ring-2 ring-mission-orange' : ''
-                }`}
-              onClick={() => {
-                setSelectedDecision(isSelected ? null : decision.id)
-                console.log(`${isSelected ? 'Collapsed' : 'Expanded'} decision: ${decision.id}`)
-              }}
-              data-testid={`decision-${decision.id}`}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarFallback className="bg-mission-orange/20 text-mission-orange">
-                        <Brain className="w-4 h-4" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-semibold">Decision DEC-{decision.id}</div>
-                      <div className="text-sm text-muted-foreground flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        {new Date(decision.timestamp).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="text-right text-sm">
-                      <div className="font-mono font-bold">{decision.confidence}%</div>
-                      <div className="text-muted-foreground">Confidence</div>
-                    </div>
-                    <Badge className={`bg-${getStatusColor(decision.status)}/20 text-${getStatusColor(decision.status)}`}>
-                      {decision.status}
-                    </Badge>
+            {/* Header / Impact Assessment */}
+            <div className="p-8 border-b border-white/5 bg-gradient-to-r from-purple-900/20 to-transparent">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-8">
+                <div>
+                  <h2 className="text-3xl font-bold font-display tracking-wide text-white mb-2 text-glow">
+                    {activeDecision.threatDetected}
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-4 text-sm font-mono text-gray-400">
+                    <span className="bg-white/5 px-2 py-1 rounded">ID: {activeDecision.id.toString().padStart(6, '0')}</span>
+                    <span className="text-purple-400 font-bold">CONFIDENCE: {(activeDecision.confidence).toFixed(1)}%</span>
                   </div>
                 </div>
-              </CardHeader>
-
-              <CardContent className="pt-0">
-                <div className="space-y-4">
-                  {/* Threat Summary */}
-                  <div className="bg-critical-red/10 border border-critical-red/20 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Shield className="w-4 h-4 text-critical-red" />
-                      <span className="font-semibold text-critical-red">Threat Detected</span>
-                    </div>
-                    <div className="text-sm">{decision.threatDetected}</div>
+                {activeDecision.status === "EXECUTING" && (
+                  <div className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 rounded-full border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.3)] animate-pulse">
+                    <div className="w-2 h-2 rounded-full bg-purple-400 animate-ping" />
+                    <span className="text-xs font-bold text-purple-300 tracking-wider">ACTIVE MANEUVER</span>
                   </div>
+                )}
+              </div>
 
-                  {/* Decision Summary */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm font-medium text-muted-foreground mb-1">Original Plan</div>
-                      <div className="font-mono text-sm bg-muted/50 p-2 rounded">
-                        {decision.originalTrajectory}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-muted-foreground mb-1">AI Decision</div>
-                      <div className="font-mono text-sm bg-mission-orange/10 p-2 rounded border border-mission-orange/20">
-                        {decision.selectedTrajectory}
-                      </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="p-5 rounded-lg bg-black/40 border border-red-500/20 relative group overflow-hidden">
+                  <div className="absolute inset-0 bg-red-500/5 group-hover:bg-red-500/10 transition-colors" />
+                  <div className="relative z-10">
+                    <div className="text-xs uppercase text-red-400 mb-2 font-bold tracking-wider">Original Trajectory</div>
+                    <div className="text-gray-200 font-mono font-bold flex items-center gap-3 text-lg">
+                      <AlertTriangle className="w-5 h-5 text-red-500" />
+                      {activeDecision.originalTrajectory}
                     </div>
                   </div>
-
-                  {isSelected && (
-                    <div className="space-y-4 pt-4 border-t">
-                      {/* Reasoning */}
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground mb-2">AI Reasoning</div>
-                        <div className="text-sm bg-muted/30 p-3 rounded-lg leading-relaxed">
-                          {decision.reasoning}
-                        </div>
-                      </div>
-
-                      {/* Trade-offs */}
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground mb-2">Impact Analysis</div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          {Object.entries(decision.tradeOffs).map(([key, value]) => {
-                            const Icon = getTradeOffIcon(key)
-                            return (
-                              <div key={key} className="text-center p-2 bg-muted/30 rounded-lg">
-                                <Icon className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
-                                <div className="text-xs text-muted-foreground capitalize">
-                                  {key.replace(/([A-Z])/g, ' $1').trim()}
-                                </div>
-                                <div className={`font-mono font-bold text-sm text-${getTradeOffColor(key)}`}>
-                                  {value}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex gap-2">
-                        <Button size="sm" className="bg-mission-orange hover:bg-mission-orange/90" data-testid={`button-implement-${decision.id}`}>
-                          Implement Decision
-                        </Button>
-                        <Button size="sm" variant="outline" data-testid={`button-modify-${decision.id}`}>
-                          Modify Parameters
-                        </Button>
-                        <Button size="sm" variant="outline" data-testid={`button-export-${decision.id}`}>
-                          Export Analysis
-                        </Button>
-                      </div>
-                    </div>
-                  )}
                 </div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
 
-      {/* Feedback Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-mission-orange" />
-            Provide AI Feedback
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <Textarea
-              placeholder="Share your feedback on AI decision quality, reasoning, or suggestions for improvement..."
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              className="min-h-[100px]"
-              data-testid="textarea-feedback"
-            />
-            <Button
-              onClick={submitFeedback}
-              disabled={!feedback.trim()}
-              className="bg-mission-orange hover:bg-mission-orange/90"
-              data-testid="button-submit-feedback"
-            >
-              Submit Feedback
-            </Button>
+                <div className="p-5 rounded-lg bg-purple-900/20 border border-purple-500/30 relative group overflow-hidden">
+                  <div className="absolute inset-0 bg-purple-500/5 group-hover:bg-purple-500/10 transition-colors" />
+                  <div className="relative z-10">
+                    <div className="text-xs uppercase text-purple-300 mb-2 font-bold tracking-wider">Optimized Solution</div>
+                    <div className="text-white font-mono font-bold flex items-center gap-3 text-lg">
+                      <CheckCircle className="w-5 h-5 text-purple-400" />
+                      {activeDecision.selectedTrajectory}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Neural Context / Reasoning */}
+            <div className="p-8 grid grid-cols-1 gap-8">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">
+                  <Brain className="w-4 h-4 text-mission-orange" />
+                  Neural Reasoning Logic
+                </h3>
+                <div className="p-6 rounded-lg bg-white/5 border-l-2 border-mission-orange/50 leading-relaxed text-gray-300 font-mono text-sm relative">
+                  <Terminal className="w-4 h-4 absolute top-4 right-4 text-gray-600" />
+                  "{activeDecision.reasoning}"
+                </div>
+              </div>
+
+              {/* Trade-off Matrix */}
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">
+                  <TrendingUp className="w-4 h-4 text-green-400" />
+                  Trade-off Analysis
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {Object.entries(activeDecision.tradeOffs).map(([key, value]) => (
+                    <div key={key} className="p-4 rounded-lg border border-white/5 bg-gradient-to-br from-white/5 to-transparent text-center hover:border-white/10 transition-colors">
+                      <div className="text-[10px] uppercase text-gray-500 mb-2 tracking-wider">{key.replace(/([A-Z])/g, ' $1').trim()}</div>
+                      <div className={`font-mono font-bold text-lg ${(value as string).includes('-') ? 'text-green-400' :
+                          (value as string).includes('+') ? 'text-yellow-400' : 'text-blue-400'
+                        }`}>
+                        {value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-        </CardContent>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
+            <Activity className="w-16 h-16 text-gray-800" />
+            <p className="font-mono text-sm">SELECT A NEURAL EVENT TO DECRYPT</p>
+          </div>
+        )}
       </Card>
     </div>
   )

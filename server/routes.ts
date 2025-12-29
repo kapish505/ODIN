@@ -36,35 +36,47 @@ export function registerRoutes(app: Express): Server {
     const memoryDecisions = [
         {
             id: 1,
-            timestamp: "2024-03-15T14:30:00Z",
-            threatDetected: "Solar flare (X9.3 class)",
-            originalTrajectory: "Direct Hohmann transfer",
-            selectedTrajectory: "L1 Lagrange point route",
-            reasoning: "Rerouting via L1 Lagrange point reduces radiation exposure by 90% with only 6-hour delay.",
-            tradeOffs: { "fuelCost": "+12%", "travelTime": "+6 hours", "radiationReduction": "-90%", "safetyScore": "+45%" },
-            status: "Implemented",
-            confidence: 94
+            timestamp: new Date().toISOString(),
+            threatDetected: "Solar Flare X9.3 (Class X)",
+            originalTrajectory: "Direct Hohmann Transfer",
+            selectedTrajectory: "L1 Lagrange Point Holding Pattern",
+            reasoning: "Detected X-Class solar flare event aligned with translunar injection window. Direct transfer would exceed crew radiation limits (>500 mSv). Holding at Earth-Sun L1 allows spacecraft hull to orient protective shielding towards the active region while waiting for particle flux to subside.",
+            tradeOffs: { "fuelCost": "+12%", "travelTime": "+18 hours", "radiationReduction": "-94%", "missionSuccessProb": "+45%" },
+            status: "EXECUTING",
+            confidence: 99.8
         },
         {
             id: 2,
-            timestamp: "2024-03-14T09:15:00Z",
-            threatDetected: "Space debris field (>10cm objects)",
-            originalTrajectory: "Standard LEO departure",
-            selectedTrajectory: "Modified inclination change",
-            reasoning: "Debris collision probability exceeded 1:1000 threshold. Implemented 2.3° inclination adjustment.",
-            tradeOffs: { "fuelCost": "+3%", "travelTime": "+45 minutes", "collisionRisk": "-85%", "safetyScore": "+30%" },
-            status: "Completed",
-            confidence: 98
+            timestamp: new Date(Date.now() - 86400000).toISOString(),
+            threatDetected: "Orbital Debris (NORAD ID 45920)",
+            originalTrajectory: "Standard LEO Departure",
+            selectedTrajectory: "Inclination Change (+2.3°)",
+            reasoning: "Predicted conjunction with spent upper stage debris (risk > 1:1000). A plane change maneuver of 2.3 degrees places the craft outside the debris shell ellipsoid. This consumes reserve station-keeping fuel but ensures collision avoidance.",
+            tradeOffs: { "fuelCost": "+3.5%", "travelTime": "+45 minutes", "collisionRisk": "-99.9%", "safetyScore": "OPTIMAL" },
+            status: "COMPLETED",
+            confidence: 98.4
+        },
+        {
+            id: 3,
+            timestamp: new Date(Date.now() - 172800000).toISOString(),
+            threatDetected: "Thermal Subsystem Anomaly",
+            originalTrajectory: "Passive Thermal Roll",
+            selectedTrajectory: "Active Radiator Deployment",
+            reasoning: "Telemetry indicated Loop B coolant pressure drop. AI logic determined passive roll insufficient to dissipate heat load. Commanded immediate deployment of auxiliary radiator panels to maintain cabin temperature within nominal range.",
+            tradeOffs: { "powerDraw": "+150W", "dragProfile": "High", "thermalStability": "RESTORED", "crewComfort": "NOMINAL" },
+            status: "COMPLETED",
+            confidence: 96.2
         }
     ];
 
     // --- Missions API ---
     app.get("/api/missions", async (req, res) => {
         try {
+            if (!db) throw new Error("No DB");
             const allMissions = await db.select().from(missions).orderBy(desc(missions.launchDate));
             res.json(allMissions);
         } catch (error) {
-            console.warn("DB fetch failed, serving memory missions.");
+            console.warn("[Missions] Serving Memory Data (DB Unavailable)");
             res.json(memoryMissions);
         }
     });
@@ -72,15 +84,17 @@ export function registerRoutes(app: Express): Server {
     // --- Logs API ---
     app.get("/api/logs", async (req, res) => {
         try {
+            if (!db) throw new Error("No DB");
             const recentLogs = await db.select().from(logs).orderBy(desc(logs.timestamp)).limit(50);
             res.json(recentLogs);
         } catch (error) {
-            res.json([]); // Return empty logs on DB failure
+            res.json([]);
         }
     });
 
     app.post("/api/logs", async (req, res) => {
         try {
+            if (!db) throw new Error("No DB");
             const { type, message, meta } = req.body;
             const [newLog] = await db.insert(logs).values({
                 type,
@@ -90,7 +104,6 @@ export function registerRoutes(app: Express): Server {
             }).returning();
             res.json(newLog);
         } catch (error) {
-            // Silently fail or send placeholder
             res.status(200).json({ id: 0, type: "INFO", message: "Log (Memory)", timestamp: new Date() });
         }
     });
@@ -98,17 +111,21 @@ export function registerRoutes(app: Express): Server {
     // --- AI Decisions API ---
     app.get("/api/ai/decisions", async (req, res) => {
         try {
+            if (!db) throw new Error("No DB");
             const allDecisions = await db.select().from(decisions).orderBy(desc(decisions.timestamp));
             res.json(allDecisions);
         } catch (error) {
-            console.warn("DB fetch failed, serving memory decisions.");
+            console.warn("[Decisions] Serving Memory Data (DB Unavailable)");
             res.json(memoryDecisions);
         }
     });
 
-    // --- Data Seeding (For Demo Purposes) ---
-    // Check and seed missions
+    // --- Data Seeding (Safe) ---
     (async () => {
+        if (!db) {
+            console.log("Skipping DB seeding (Running in Memory Mode)");
+            return;
+        }
         try {
             const existingMissions = await db.select().from(missions);
             if (existingMissions.length === 0) {
@@ -122,57 +139,11 @@ export function registerRoutes(app: Express): Server {
                         arrivalDate: new Date("2025-09-18"),
                         threatLevel: "Low",
                         description: "Crewed lunar landing mission"
-                    },
-                    {
-                        name: "Mars Sample Return",
-                        status: "Planning",
-                        progress: 15,
-                        launchDate: new Date("2028-06-20"),
-                        arrivalDate: new Date("2029-02-15"),
-                        threatLevel: "Medium",
-                        description: "Robotic return of geological samples"
-                    }
-                ]);
-            }
-
-            const existingDecisions = await db.select().from(decisions);
-            if (existingDecisions.length === 0) {
-                console.log("Seeding AI decisions...");
-                await db.insert(decisions).values([
-                    {
-                        timestamp: new Date("2024-03-15T14:30:00Z"),
-                        threatDetected: "Solar flare (X9.3 class)",
-                        originalTrajectory: "Direct Hohmann transfer",
-                        selectedTrajectory: "L1 Lagrange point route",
-                        reasoning: "Rerouting via L1 Lagrange point reduces radiation exposure by 90% with only 6-hour delay.",
-                        tradeOffs: {
-                            fuelCost: "+12%",
-                            travelTime: "+6 hours",
-                            radiationReduction: "-90%",
-                            safetyScore: "+45%"
-                        },
-                        status: "Implemented",
-                        confidence: 94
-                    },
-                    {
-                        timestamp: new Date("2024-03-14T09:15:00Z"),
-                        threatDetected: "Space debris field (>10cm objects)",
-                        originalTrajectory: "Standard LEO departure",
-                        selectedTrajectory: "Modified inclination change",
-                        reasoning: "Debris collision probability exceeded 1:1000 threshold. Implemented 2.3° inclination adjustment.",
-                        tradeOffs: {
-                            fuelCost: "+3%",
-                            travelTime: "+45 minutes",
-                            collisionRisk: "-85%",
-                            safetyScore: "+30%"
-                        },
-                        status: "Completed",
-                        confidence: 98
                     }
                 ]);
             }
         } catch (error) {
-            console.warn("Skipping DB seeding (DB unavailable).");
+            console.warn("Seeding failed slightly:", error);
         }
     })();
 
