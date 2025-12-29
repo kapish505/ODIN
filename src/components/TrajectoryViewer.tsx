@@ -118,58 +118,78 @@ export default function TrajectoryViewer() {
     });
   }, [nominalPath]);
 
+  // Ref to track phase immediately inside closures
+  const simulationPhaseRef = useRef(simulationPhase);
+  useEffect(() => {
+    simulationPhaseRef.current = simulationPhase;
+  }, [simulationPhase]);
+
   // 4. Simulation Logic
   useEffect(() => {
     if (isPlaying) {
       const intervalMs = Math.max(20, 110 - speed[0]);
 
-      animationRef.current = setInterval(() => {
-        setAnimationFrame(prev => {
-          const nextFrame = (prev + 1) % 100;
+      if (simulationPhase === 'ANALYZING') {
+        // Specialized "Thinking" Loop
+        const sequence = [
+          { type: "CRITICAL", text: `ANOMALY DETECTED: ${trueRiskContext.risk.message}` },
+          { type: "WARN", text: `Radiation thresholds exceeded on Nominal Path.` },
+          { type: "DECISION", text: "Evaluating Mitigation Options..." },
+          { type: "INFO", text: "Option A: Maintain Course. Est. Crew Dose: > 500 mSv. [REJECTED]" },
+          { type: "INFO", text: "Option B: Abort to Earth. Fuel Insufficient. [REJECTED]" },
+          { type: "INFO", text: `Option C: High-Inclination Transfer. Delta-V: +0.5 km/s. [ACCEPTED]` },
+          { type: "SUCCESS", text: "Rerouting to Optimized Trajectory." }
+        ];
 
-          // --- EVENT INJECTION LOGIC ---
-          if (nextFrame === 0) {
-            // Reset simulation on loop
-            setSimulationPhase('NOMINAL');
-            setLogs([]);
-            addLog("INFO", "Mission Clock Start. T-0.");
-            addLog("INFO", "Tracking Nominal Trajectory.");
+        let step = 0;
+        animationRef.current = setInterval(() => {
+          if (step < sequence.length) {
+            const log = sequence[step];
+            // @ts-ignore
+            addLog(log.type, log.text);
+            step++;
+          } else {
+            setSimulationPhase('OPTIMIZED');
+            if (animationRef.current) clearInterval(animationRef.current);
           }
+        }, 600); // 600ms per log entry
+      } else if (simulationPhase === 'NOMINAL' || simulationPhase === 'OPTIMIZED') {
+        // Normal Animation Loop
+        animationRef.current = setInterval(() => {
+          setAnimationFrame(prev => {
+            const nextFrame = (prev + 1) % 100;
 
-          // At 25% progress, perform "Deep Space Scan"
-          if (nextFrame === 25 && simulationPhase === 'NOMINAL') {
-            addLog("INFO", "Initiating Deep Space Environmental Scan...");
-          }
-
-          // At 30%, Trigger Event if Risk Exists
-          if (nextFrame === 30 && simulationPhase === 'NOMINAL') {
-            console.log("[ODIN] Performing Risk Scan. Current Context:", trueRiskContext);
-            if (trueRiskContext.risk.riskLevel !== "Low") {
-              setSimulationPhase('ANALYZING');
-              addLog("CRITICAL", `ANOMALY DETECTED: ${trueRiskContext.risk.message}`);
-              addLog("WARN", `Radiation thresholds exceeded on Nominal Path.`);
-
-              // Simulate "Thinking" time (pause briefly or just log)
-              setTimeout(() => {
-                addLog("DECISION", "Evaluating Mitigation Options...");
-                addLog("INFO", "Option A: Maintain Course. Est. Crew Dose: > 500 mSv. [REJECTED]");
-                addLog("INFO", "Option B: Abort to Earth. Fuel Insufficient. [REJECTED]");
-                addLog("INFO", `Option C: High-Inclination Transfer. Delta-V: +0.5 km/s. [ACCEPTED]`);
-
-                addLog("SUCCESS", "Rerouting to Optimized Trajectory.");
-                setSimulationPhase('OPTIMIZED');
-              }, 500);
-            } else {
-              addLog("SUCCESS", "Scan Nominal. No threats detected.");
+            // --- EVENT INJECTION LOGIC ---
+            if (nextFrame === 0) {
+              setSimulationPhase('NOMINAL');
+              setLogs([]);
+              addLog("INFO", "Mission Clock Start. T-0.");
+              addLog("INFO", "Tracking Nominal Trajectory.");
             }
-          }
 
-          return nextFrame;
-        });
-      }, intervalMs);
-    } else if (animationRef.current) {
-      clearInterval(animationRef.current);
+            if (nextFrame === 25 && simulationPhaseRef.current === 'NOMINAL') {
+              addLog("INFO", "Initiating Deep Space Environmental Scan...");
+            }
+
+            // At 30%, Trigger Event if Risk Exists
+            if (nextFrame === 30 && simulationPhaseRef.current === 'NOMINAL') {
+              // Check Risk
+              if (trueRiskContext.risk.riskLevel !== "Low") {
+                console.log("[ODIN] Risk Detected. Transitioning to ANALYZING.");
+                setSimulationPhase('ANALYZING'); // This will trigger cleanup and switch to the ANALYZING block
+                // IMPORTANT: Do NOT return nextFrame here if we want to 'pause' visually, 
+                // but returning it is fine as the Interval will be cleared in next render.
+              } else {
+                addLog("SUCCESS", "Scan Nominal. No threats detected.");
+              }
+            }
+
+            return nextFrame;
+          });
+        }, intervalMs);
+      }
     }
+
     return () => { if (animationRef.current) clearInterval(animationRef.current); };
   }, [isPlaying, speed, simulationPhase, trueRiskContext]);
 
