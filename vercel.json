@@ -1,8 +1,20 @@
 {
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index"
+      "source": "/api/weather/notifications",
+      "destination": "/api/weather.ts"
+    },
+    {
+      "source": "/api/missions",
+      "destination": "/api/missions.ts"
+    },
+    {
+      "source": "/api/logs",
+      "destination": "/api/logs.ts"
+    },
+    {
+      "source": "/api/ai/decisions",
+      "destination": "/api/decisions.ts"
     },
     {
       "source": "/(.*)",
