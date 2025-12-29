@@ -10,13 +10,13 @@ import { eq } from "drizzle-orm";
 
 const scryptAsync = promisify(scrypt);
 
-async function hashPassword(password: string) {
+async function hashPassword(password: string): Promise<string> {
     const salt = randomBytes(16).toString("hex");
     const buf = (await scryptAsync(password, salt, 64)) as Buffer;
     return `${buf.toString("hex")}.${salt}`;
 }
 
-async function comparePasswords(supplied: string, stored: string) {
+async function comparePasswords(supplied: string, stored: string): Promise<boolean> {
     const [hashed, salt] = stored.split(".");
     const hashedBuf = Buffer.from(hashed, "hex");
     const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
@@ -24,18 +24,24 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+    // Guard: if DB is not initialized, skip auth setup.
+    if (!db) {
+        console.warn("DB not available – authentication routes are disabled.");
+        return;
+    }
+
     const sessionSettings: session.SessionOptions = {
         secret: process.env.SESSION_SECRET || "odin_mission_control_secret",
         resave: false,
         saveUninitialized: false,
-        store: undefined, // Default MemoryStore for now
+        store: undefined, // Default MemoryStore
         cookie: {
             secure: process.env.NODE_ENV === "production",
-        }
+        },
     };
 
     if (app.get("env") === "production") {
-        app.set("trust proxy", 1); // trust first proxy
+        app.set("trust proxy", 1);
     }
 
     app.use(session(sessionSettings));
@@ -47,12 +53,8 @@ export function setupAuth(app: Express) {
             try {
                 const [user] = await db.select().from(users).where(eq(users.username, username)).limit(1);
                 if (!user) return done(null, false, { message: "Invalid username" });
-
-                // For MVP, if we want to allow auto-login or simple demo, we could skip hash check for 'admin'
-                // But let's do it right. If user exists, check password.
                 const isValid = await comparePasswords(password, user.password);
                 if (!isValid) return done(null, false, { message: "Invalid password" });
-
                 return done(null, user);
             } catch (err) {
                 return done(err);
@@ -73,23 +75,20 @@ export function setupAuth(app: Express) {
         }
     });
 
+    // Register routes
     app.post("/api/register", async (req, res, next) => {
         try {
             const result = insertUserSchema.safeParse(req.body);
             if (!result.success) {
                 return res.status(400).send(result.error.issues);
             }
-
             const { username, password } = result.data;
             const [existingUser] = await db.select().from(users).where(eq(users.username, username)).limit(1);
-
             if (existingUser) {
                 return res.status(400).send("Username already exists");
             }
-
             const hashedPassword = await hashPassword(password);
             const [newUser] = await db.insert(users).values({ username, password: hashedPassword }).returning();
-
             req.login(newUser, (err) => {
                 if (err) return next(err);
                 res.status(201).json({ message: "User created", user: { id: newUser.id, username: newUser.username } });
