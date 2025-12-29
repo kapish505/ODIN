@@ -60,7 +60,8 @@ export default function TrajectoryViewer() {
   }, [launchDate]);
 
   // 2. Data Fetching (The "Truth")
-  const { data: notifications, isLoading: isWeatherLoading } = useQuery<any[]>({
+  // 2. Data Fetching (The "Truth")
+  const { data: notifications, isLoading: isWeatherLoading, isError, error } = useQuery<any[]>({
     queryKey: ["/api/weather/notifications", launchDate],
     queryFn: async () => {
       const dateObj = new Date(launchDate);
@@ -68,8 +69,20 @@ export default function TrajectoryViewer() {
       const endDateObj = new Date(dateObj);
       endDateObj.setDate(endDateObj.getDate() + 7);
       const endDateStr = endDateObj.toISOString().split('T')[0];
+
+      console.log(`[ODIN] Fetching Weather: ${dateStr} to ${endDateStr}`);
       const res = await apiRequest("GET", `/api/weather/notifications?startDate=${dateStr}&endDate=${endDateStr}`);
-      return res.json();
+
+      if (!res.ok) {
+        throw new Error(`API Error: ${res.statusText}`);
+      }
+
+      const json = await res.json();
+      if (!Array.isArray(json)) {
+        console.error("[ODIN] API Response Invalid (Not Array):", json);
+        return []; // Fail gracefully
+      }
+      return json;
     }
   });
 
@@ -320,7 +333,11 @@ export default function TrajectoryViewer() {
 
                       // DEBUG: Log Launch Context
                       const loadedCount = notifications?.length || 0;
-                      addLog("INFO", `[DEBUG] Weather Data: ${loadedCount > 0 ? 'Loaded' : 'None'} (${loadedCount} alerts)`);
+                      if (isError) {
+                        addLog("CRITICAL", `[DEBUG] Weather Fetch Failed: ${error?.message}`);
+                      } else {
+                        addLog("INFO", `[DEBUG] Weather Data: ${loadedCount > 0 ? 'Loaded' : 'None'} (${loadedCount} alerts)`);
+                      }
                       addLog("INFO", `[DEBUG] Launch Date: ${launchDate}`);
 
                       setIsPlaying(true);
@@ -333,7 +350,11 @@ export default function TrajectoryViewer() {
 
                       // DEBUG: Log Launch Context on first start
                       const loadedCount = notifications?.length || 0;
-                      addLog("INFO", `[DEBUG] Weather Data: ${loadedCount > 0 ? 'Loaded' : 'None'} (${loadedCount} alerts)`);
+                      if (isError) {
+                        addLog("CRITICAL", `[DEBUG] Weather Fetch Failed: ${error?.message}`);
+                      } else {
+                        addLog("INFO", `[DEBUG] Weather Data: ${loadedCount > 0 ? 'Loaded' : 'None'} (${loadedCount} alerts)`);
+                      }
                       addLog("INFO", `[DEBUG] Launch Date: ${launchDate}`);
                     }
                     setIsPlaying(!isPlaying)
