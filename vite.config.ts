@@ -15,4 +15,12 @@ export default defineConfig({
     outDir: path.resolve(__dirname, "dist"), // output folder for Vercel
     emptyOutDir: true,
   },
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://0.0.0.0:5000",
+        changeOrigin: true,
+      },
+    },
+  },
 });

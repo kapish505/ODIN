@@ -1,9 +1,7 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// API configuration for Python backend
-const API_BASE_URL = import.meta.env.DEV 
-  ? 'http://localhost:3001'  // Development: Python backend on port 3001
-  : 'https://odin-n80z.onrender.com';                  // Production: proxy to backend
+// API configuration - relative path for proxy
+const API_BASE_URL = "/api";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -17,9 +15,14 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  // Construct full URL for Python backend
-  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url.startsWith('/') ? url : `/${url}`}`;
-  
+  // Construct full URL
+  let fullUrl = url;
+  if (!url.startsWith("http")) {
+    const cleanUrl = url.startsWith("/") ? url.substring(1) : url;
+    // If API_BASE_URL is just '/api', we need to append
+    fullUrl = url.startsWith("/api") ? url : `${API_BASE_URL}/${cleanUrl}`;
+  }
+
   const res = await fetch(fullUrl, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
@@ -36,22 +39,23 @@ export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    // Construct full URL for Python backend
-    const endpoint = queryKey.join("/");
-    const fullUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}/${endpoint}`;
-    
-    const res = await fetch(fullUrl, {
-      credentials: "include",
-    });
+    async ({ queryKey }) => {
+      // Construct full URL
+      const endpoint = queryKey.join("/");
+      // If API_BASE_URL is just '/api', we need to append
+      const fullUrl = endpoint.startsWith("http") ? endpoint : (endpoint.startsWith("/api") ? endpoint : `${API_BASE_URL}/${endpoint}`);
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
-    }
+      const res = await fetch(fullUrl, {
+        credentials: "include",
+      });
 
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
+      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+        return null;
+      }
+
+      await throwIfResNotOk(res);
+      return await res.json();
+    };
 
 export const queryClient = new QueryClient({
   defaultOptions: {
