@@ -14,7 +14,8 @@ import {
   Calendar,
   Play,
   Pause,
-  Terminal
+  Terminal,
+  Activity
 } from "lucide-react"
 import Plotly from "plotly.js-dist-min"
 import createPlotlyComponent from "react-plotly.js/factory"
@@ -26,41 +27,39 @@ const Plot = createPlotlyComponent(Plotly)
 
 interface LogEntry {
   timestamp: string;
-  type: "INFO" | "WARN" | "DECISION" | "SUCCESS";
+  type: "INFO" | "WARN" | "DECISION" | "SUCCESS" | "CRITICAL";
   message: string;
 }
 
 export default function TrajectoryViewer() {
-  const [speed, setSpeed] = useState([50]) // Simulation speed (ms per frame)
+  const [speed, setSpeed] = useState([50])
   const [launchDate, setLaunchDate] = useState<string>(new Date().toISOString().slice(0, 16));
   const [startPos, setStartPos] = useState<Vector3>({ x: 7000, y: 0, z: 0 })
 
-  // Animation State
+  // Simulation State
   const [isPlaying, setIsPlaying] = useState(false);
   const [animationFrame, setAnimationFrame] = useState(0);
+  const [simulationPhase, setSimulationPhase] = useState<'IDLE' | 'NOMINAL' | 'ANALYZING' | 'OPTIMIZED'>('IDLE');
   const animationRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Logs State
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const addLog = (type: LogEntry["type"], message: string) => {
     setLogs(prev => [...prev, { timestamp: new Date().toLocaleTimeString(), type, message }]);
   };
 
-  // 1. Calculate Moon Position
+  // 1. Ephemeris
   const targetPos = useMemo(() => {
     const epoch = new Date("2024-01-01T00:00:00Z").getTime();
     const currentCallback = new Date(launchDate).getTime();
     const diffDays = (currentCallback - epoch) / (1000 * 60 * 60 * 24);
-
     const period = 27.32;
     const distance = 384400;
     const angle = (diffDays / period) * 2 * Math.PI;
-
     return { x: distance * Math.cos(angle), y: distance * Math.sin(angle), z: 0 };
   }, [launchDate]);
 
-  // 2. Fetch Weather
+  // 2. Data Fetching (The "Truth")
   const { data: notifications } = useQuery<any[]>({
     queryKey: ["/api/weather/notifications", launchDate],
     queryFn: async () => {
@@ -69,14 +68,14 @@ export default function TrajectoryViewer() {
       const endDateObj = new Date(dateObj);
       endDateObj.setDate(endDateObj.getDate() + 7);
       const endDateStr = endDateObj.toISOString().split('T')[0];
-
       const res = await apiRequest("GET", `/api/weather/notifications?startDate=${dateStr}&endDate=${endDateStr}`);
       return res.json();
     }
   });
 
-  const weatherConstraint: WeatherConstraint = useMemo(() => {
-    if (!notifications) return { solarFlare: false, geomagneticStorm: false, radiationFlux: 0 };
+  // Calculate the "True Risk" based on API data
+  const trueRiskContext = useMemo(() => {
+    if (!notifications) return { constraint: { solarFlare: false, geomagneticStorm: false, radiationFlux: 0 }, risk: { riskLevel: "Low", message: "Nominal" } };
 
     const launchTime = new Date(launchDate).getTime();
     const windowAlerts = notifications.filter(n => {
@@ -84,72 +83,88 @@ export default function TrajectoryViewer() {
       return Math.abs(issueTime - launchTime) < (48 * 60 * 60 * 1000);
     });
 
-    return {
+    const constraint = {
       solarFlare: windowAlerts.some(n => n.messageType.includes("FLR")),
       geomagneticStorm: windowAlerts.some(n => n.messageType.includes("CME") || n.messageType.includes("GST")),
       radiationFlux: windowAlerts.some(n => n.messageType.includes("SEP")) ? 100 : 10
     };
+
+    return { constraint, risk: assessMissionRisk(constraint, 72) };
   }, [notifications, launchDate]);
 
-  // 3. Risk Assessment & Logging
-  const missionRisks = useMemo(() => {
-    const risk = assessMissionRisk(weatherConstraint, 72); // Hardcoded 72h TOF for baseline
-    return risk;
-  }, [weatherConstraint]);
-
-  // Effect to handle logging side-effects safely
-  useEffect(() => {
-    setLogs([]);
-    addLog("INFO", "Initializing trajectory calculation...");
-
-    if (missionRisks.riskLevel === "Low") {
-      addLog("SUCCESS", "Conditions nominal. Standard Hohmann transfer approved.");
-    } else {
-      addLog("WARN", `Threat detected: ${missionRisks.message}`);
-      addLog("DECISION", "Calculating optimized avoidance trajectory...");
-      addLog("INFO", `Applying Delta-V penalty for ${missionRisks.riskLevel} risk environment.`);
-    }
-  }, [missionRisks.riskLevel, missionRisks.message]);
-
-
-  // 4. Generate Trajectories
+  // 3. Trajectory Generation
   const nominalPath = useMemo(() => generateLambertTrajectory(startPos, targetPos, 100), [startPos, targetPos]);
 
-  const activePath = useMemo(() => {
-    if (missionRisks.riskLevel === "Low") return nominalPath;
-
-    // Generate "Optimized" path by adding a Z-deviation (inclination change) to simulate avoidance
+  // This is the "Safe" path we *might* switch to
+  const optimizedPath = useMemo(() => {
     return nominalPath.map((p, i) => {
       const progress = i / 100;
-      const deviation = Math.sin(progress * Math.PI) * 50000; // 50km arch
+      const deviation = Math.sin(progress * Math.PI) * 40000;
+      // Add Z-deviation for avoidance
       return { ...p, z: p.z + deviation };
     });
-  }, [nominalPath, missionRisks]);
+  }, [nominalPath]);
 
-  // 5. Physics Metrics
-  const deltaV = useMemo(() => {
-    const base = calculateDeltaV({ x: 10, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, startPos, targetPos);
-    const penalty = missionRisks.riskLevel === "High" ? 0.5 : missionRisks.riskLevel === "Critical" ? 999 : 0;
-    return base + penalty;
-  }, [startPos, targetPos, missionRisks]);
-
-  // 6. Animation Loop
+  // 4. Simulation Logic
   useEffect(() => {
     if (isPlaying) {
-      // Speed value: lower is faster interval. Map 1-100 to 100ms-10ms
-      const intervalMs = Math.max(10, 110 - speed[0]);
+      const intervalMs = Math.max(20, 110 - speed[0]);
 
       animationRef.current = setInterval(() => {
-        setAnimationFrame(prev => (prev + 1) % 100);
+        setAnimationFrame(prev => {
+          const nextFrame = (prev + 1) % 100;
+
+          // --- EVENT INJECTION LOGIC ---
+          if (nextFrame === 0) {
+            // Reset simulation on loop
+            setSimulationPhase('NOMINAL');
+            setLogs([]);
+            addLog("INFO", "Mission Clock Start. T-0.");
+            addLog("INFO", "Tracking Nominal Trajectory.");
+          }
+
+          // At 25% progress, perform "Deep Space Scan"
+          if (nextFrame === 25 && simulationPhase === 'NOMINAL') {
+            addLog("INFO", "Initiating Deep Space Environmental Scan...");
+          }
+
+          // At 30%, Trigger Event if Risk Exists
+          if (nextFrame === 30 && simulationPhase === 'NOMINAL') {
+            if (trueRiskContext.risk.riskLevel !== "Low") {
+              setSimulationPhase('ANALYZING');
+              addLog("CRITICAL", `ANOMALY DETECTED: ${trueRiskContext.risk.message}`);
+              addLog("WARN", `Radiation thresholds exceeded on Nominal Path.`);
+
+              // Simulate "Thinking" time (pause briefly or just log)
+              setTimeout(() => {
+                addLog("DECISION", "Evaluating Mitigation Options...");
+                addLog("INFO", "Option A: Maintain Course. Est. Crew Dose: > 500 mSv. [REJECTED]");
+                addLog("INFO", "Option B: Abort to Earth. Fuel Insufficient. [REJECTED]");
+                addLog("INFO", `Option C: High-Inclination Transfer. Delta-V: +0.5 km/s. [ACCEPTED]`);
+
+                addLog("SUCCESS", "Rerouting to Optimized Trajectory.");
+                setSimulationPhase('OPTIMIZED');
+              }, 500);
+            } else {
+              addLog("SUCCESS", "Scan Nominal. No threats detected.");
+            }
+          }
+
+          return nextFrame;
+        });
       }, intervalMs);
     } else if (animationRef.current) {
       clearInterval(animationRef.current);
     }
     return () => { if (animationRef.current) clearInterval(animationRef.current); };
-  }, [isPlaying, speed]);
+  }, [isPlaying, speed, simulationPhase, trueRiskContext]);
 
-  // 7. Plot Data
+
+  // 5. Visualization Data Construction
   const plotData = useMemo(() => {
+    // Current Path depends on phase
+    const currentPath = simulationPhase === 'OPTIMIZED' ? optimizedPath : nominalPath;
+
     const earth = {
       x: [0], y: [0], z: [0],
       mode: 'markers',
@@ -166,29 +181,36 @@ export default function TrajectoryViewer() {
       type: 'scatter3d'
     };
 
+    // Always show Nominal Path (faded if abandoned)
     const nominalTrace = {
       x: nominalPath.map(p => p.x),
       y: nominalPath.map(p => p.y),
       z: nominalPath.map(p => p.z),
       mode: 'lines',
-      line: { color: '#4b5563', width: 2, dash: 'dash' }, // Gray dashed
-      name: 'Nominal Path',
+      line: {
+        color: simulationPhase === 'OPTIMIZED' ? '#ef4444' : '#4b5563',
+        width: 3,
+        dash: 'dash'
+      },
+      name: simulationPhase === 'OPTIMIZED' ? 'Rejected Path' : 'Nominal Path',
       type: 'scatter3d',
-      opacity: 0.5
+      opacity: simulationPhase === 'OPTIMIZED' ? 0.4 : 0.6
     };
 
+    // Show Optimized Path only if activated
     const optimizedTrace = {
-      x: activePath.map(p => p.x),
-      y: activePath.map(p => p.y),
-      z: activePath.map(p => p.z),
+      x: optimizedPath.map(p => p.x),
+      y: optimizedPath.map(p => p.y),
+      z: optimizedPath.map(p => p.z),
       mode: 'lines',
-      line: { color: missionRisks.color, width: 6 },
-      name: missionRisks.riskLevel === 'Low' ? 'Active Trajectory' : 'Optimized Avoidance Path',
-      type: 'scatter3d'
+      line: { color: '#22c55e', width: 6 },
+      name: 'Optimized Path',
+      type: 'scatter3d',
+      visible: simulationPhase === 'OPTIMIZED'
     };
 
     // Spacecraft Marker
-    const currentPos = activePath[animationFrame] || startPos;
+    const currentPos = currentPath[animationFrame] || startPos;
     const spacecraft = {
       x: [currentPos.x], y: [currentPos.y], z: [currentPos.z],
       mode: 'markers',
@@ -198,8 +220,9 @@ export default function TrajectoryViewer() {
     };
 
     return [earth, moon, nominalTrace, optimizedTrace, spacecraft];
-  }, [nominalPath, activePath, targetPos, missionRisks, animationFrame]);
+  }, [nominalPath, optimizedPath, targetPos, simulationPhase, animationFrame]);
 
+  // Layout
   const layout = useMemo(() => ({
     autosize: true,
     paper_bgcolor: 'rgba(0,0,0,0)',
@@ -231,9 +254,12 @@ export default function TrajectoryViewer() {
                   <span className="text-xs text-muted-foreground w-12">Speed</span>
                   <Slider value={speed} onValueChange={setSpeed} max={100} min={1} step={1} className="w-24" />
                 </div>
-                <Button size="sm" variant={isPlaying ? "destructive" : "default"} onClick={() => setIsPlaying(!isPlaying)}>
+                <Button size="sm" variant={isPlaying ? "destructive" : "default"} onClick={() => {
+                  if (!isPlaying && simulationPhase === 'IDLE') setSimulationPhase('NOMINAL');
+                  setIsPlaying(!isPlaying)
+                }}>
                   {isPlaying ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-                  {isPlaying ? "Pause" : "Simulate"}
+                  {isPlaying ? "Pause" : "Simulate Mission"}
                 </Button>
               </div>
             </CardHeader>
@@ -245,6 +271,18 @@ export default function TrajectoryViewer() {
                 className="w-full h-full"
                 config={{ displayModeBar: false }}
               />
+
+              {/* Floating HUD Status */}
+              <div className="absolute top-4 left-4 flex flex-col gap-2">
+                <Badge variant="outline" className={`
+                             ${simulationPhase === 'NOMINAL' ? 'border-gray-500 text-gray-400' :
+                    simulationPhase === 'ANALYZING' ? 'border-yellow-500 text-yellow-500 animate-pulse' :
+                      simulationPhase === 'OPTIMIZED' ? 'border-green-500 text-green-500' : 'border-gray-700 text-gray-700'}
+                             bg-black/50 backdrop-blur
+                         `}>
+                  STATUS: {simulationPhase}
+                </Badge>
+              </div>
             </CardContent>
           </Card>
 
@@ -253,21 +291,22 @@ export default function TrajectoryViewer() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm">
                 <Terminal className="w-4 h-4 text-primary" />
-                Decision Transparency Logs
+                Decision Transparency Logs (Live Neural Stream)
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[150px] w-full rounded-md border border-white/10 bg-black/50 p-4">
+              <ScrollArea className="h-[200px] w-full rounded-md border border-white/10 bg-black/50 p-4 font-mono text-xs">
+                {logs.length === 0 && <span className="text-muted-foreground italic">System Idle. Awaiting simulation start...</span>}
                 {logs.map((log, i) => (
-                  <div key={i} className="mb-2 text-xs font-mono">
-                    <span className="text-muted-foreground">[{log.timestamp}]</span>
-                    <span className={
-                      log.type === 'INFO' ? 'text-blue-400 ml-2' :
-                        log.type === 'WARN' ? 'text-yellow-400 ml-2' :
-                          log.type === 'DECISION' ? 'text-purple-400 ml-2' :
-                            'text-green-400 ml-2'
-                    }>{log.type}:</span>
-                    <span className="text-white/80 ml-2">{log.message}</span>
+                  <div key={i} className="mb-2">
+                    <span className="text-muted-foreground opacity-50">[{log.timestamp}]</span>
+                    <span className={`font-bold ml-2 ${log.type === 'INFO' ? 'text-blue-400' :
+                        log.type === 'WARN' ? 'text-yellow-400' :
+                          log.type === 'CRITICAL' ? 'text-red-500 animate-pulse' :
+                            log.type === 'DECISION' ? 'text-purple-400' :
+                              'text-green-400'
+                      }`}>[{log.type}]</span>
+                    <span className="text-gray-300 ml-2">{log.message}</span>
                   </div>
                 ))}
               </ScrollArea>
@@ -275,16 +314,16 @@ export default function TrajectoryViewer() {
           </Card>
         </div>
 
-        {/* Right Column: Controls */}
+        {/* Right Column: Controls & Metrics */}
         <div className="space-y-6">
           <Card className="bg-black/20 border-white/10">
             <CardContent className="pt-6 space-y-6">
-              <div className={`p-4 rounded-lg border ${missionRisks.safe ? 'bg-success-green/10 border-success-green/20' : 'bg-critical-red/10 border-critical-red/20'}`}>
+              <div className={`p-4 rounded-lg border ${trueRiskContext.risk.riskLevel === 'Low' ? 'bg-success-green/10 border-success-green/20' : 'bg-critical-red/10 border-critical-red/20'}`}>
                 <div className="flex items-center gap-2 mb-2">
-                  {missionRisks.safe ? <ShieldAlert className="w-4 h-4 text-success-green" /> : <AlertTriangle className="w-4 h-4 text-critical-red" />}
-                  <span className="font-semibold text-sm">{missionRisks.riskLevel} Risk Detected</span>
+                  {trueRiskContext.risk.riskLevel === 'Low' ? <ShieldAlert className="w-4 h-4 text-success-green" /> : <AlertTriangle className="w-4 h-4 text-critical-red" />}
+                  <span className="font-semibold text-sm">Environment Forecast</span>
                 </div>
-                <p className="text-xs text-muted-foreground">{missionRisks.message}</p>
+                <p className="text-xs text-muted-foreground">{trueRiskContext.risk.message}</p>
               </div>
 
               <div className="space-y-2">
@@ -297,14 +336,16 @@ export default function TrajectoryViewer() {
 
               <div className="p-4 rounded-lg bg-white/5 space-y-2 text-sm font-mono">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Path:</span>
-                  <span className={missionRisks.riskLevel === 'Low' ? "text-success-green" : "text-mission-orange"}>
-                    {missionRisks.riskLevel === 'Low' ? "DIRECT" : "OPTIMIZED"}
+                  <span className="text-muted-foreground">Active Protocol:</span>
+                  <span className={simulationPhase === 'OPTIMIZED' ? "text-success-green" : "text-gray-400"}>
+                    {simulationPhase === 'IDLE' ? "STANDBY" : simulationPhase}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Est. Delta V:</span>
-                  <span>{deltaV.toFixed(2)} km/s</span>
+                  <span>{calculateDeltaV(
+                    { x: 10, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, startPos, targetPos
+                  ).toFixed(2)} km/s</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Flight Time:</span>

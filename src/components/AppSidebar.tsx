@@ -8,7 +8,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem
 } from "@/components/ui/sidebar"
-import { Home, Rocket, Shield, Brain, History, Settings, Globe, Target, Bot } from "lucide-react"
+import { Home, Rocket, Shield, Brain, Target, Bot } from "lucide-react"
 import { useLocation } from "wouter"
 import { Link } from "wouter"
 
@@ -18,9 +18,6 @@ const menuItems = [
   { title: "Active Missions", url: "/dashboard", icon: Rocket },
   { title: "Threat Detection", url: "/threats", icon: Shield },
   { title: "AI Decisions", url: "/decisions", icon: Brain },
-  { title: "Mission History", url: "/dashboard", icon: History },
-  { title: "Global Settings", url: "/dashboard", icon: Globe },
-  { title: "System Config", url: "/dashboard", icon: Settings },
 ]
 
 export default function AppSidebar() {
