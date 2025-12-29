@@ -177,10 +177,15 @@ export function registerRoutes(app: Express): Server {
     })();
 
     // --- NASA Space Weather API (DONKI) ---
+    // --- NASA DONKI Proxy ---
     app.get("/api/weather/notifications", async (req, res) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
+
         try {
             // Use DEMO_KEY for prototype, or ENV variable if available
             const apiKey = process.env.NASA_API_KEY || "DEMO_KEY";
+            console.log(`[Proxy] Using API Key: ${apiKey === 'DEMO_KEY' ? 'DEMO_KEY' : '***' + apiKey.slice(-4)}`);
 
             // Get dates from query or default to last 30 days
             let dateStr = "";
@@ -200,19 +205,37 @@ export function registerRoutes(app: Express): Server {
 
             const apiUrl = `https://api.nasa.gov/DONKI/notifications?startDate=${dateStr}${endDateStr}&type=all&api_key=${apiKey}`;
 
-            console.log(`Fetching space weather from: ${apiUrl}`);
-            const response = await fetch(apiUrl);
+            console.log(`[Proxy] Fetching: ${apiUrl.replace(apiKey, '***')}`);
+            const response = await fetch(apiUrl, { signal: controller.signal });
+
+            clearTimeout(timeout);
 
             if (!response.ok) {
-                console.error(`NASA API Error: ${response.status} ${response.statusText}`);
-                return res.status(response.status).json({ message: "Failed to fetch space weather data" });
+                const errorText = await response.text();
+                console.error(`[Proxy] NASA API Error ${response.status}: ${errorText.slice(0, 200)}`);
+                return res.status(response.status).json({
+                    message: "NASA API Error",
+                    details: errorText.slice(0, 100)
+                });
             }
 
-            const data = await response.json();
-            res.json(data);
-        } catch (error) {
-            console.error("NASA API Proxy Error:", error);
-            res.status(500).json({ message: "Internal Server Error fetching space weather" });
+            // Safe Parse
+            const text = await response.text();
+            try {
+                const data = JSON.parse(text);
+                res.json(data);
+            } catch (parseError) {
+                console.error("[Proxy] JSON Parse Error on:", text.slice(0, 100));
+                res.status(500).json({ message: "Invalid JSON from NASA API" });
+            }
+
+        } catch (error: any) {
+            clearTimeout(timeout);
+            console.error("[Proxy] Critical Failure:", error.message);
+            if (error.name === 'AbortError') {
+                return res.status(504).json({ message: "NASA API Timeout (Gateway Timeout)" });
+            }
+            res.status(500).json({ message: "Internal Proxy Error", error: error.message });
         }
     });
 
