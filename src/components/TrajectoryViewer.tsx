@@ -1,215 +1,177 @@
-import { useState } from "react"
+import { useState, useMemo, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Slider } from "@/components/ui/slider"
-import { 
-  RotateCcw, 
-  Play, 
-  Pause, 
-  Square, 
-  Maximize, 
-  Settings,
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  RotateCcw,
+  Play,
+  Pause,
+  Maximize,
   Target,
-  Orbit
+  Orbit,
+  Calculator
 } from "lucide-react"
-import trajectoryImage from "@assets/generated_images/Orbital_trajectory_visualization_bda0124a.png"
+import Plotly from "plotly.js-dist-min"
+import createPlotlyComponent from "react-plotly.js/factory"
+import { generateLambertTrajectory, Vector3 } from "@/lib/lambert/solver"
+
+const Plot = createPlotlyComponent(Plotly)
 
 export default function TrajectoryViewer() {
   const [isPlaying, setIsPlaying] = useState(false)
-  const [timeScale, setTimeScale] = useState([1])
-  const [selectedPhase, setSelectedPhase] = useState("transfer")
+  const [tof, setTof] = useState([72]) // Time of flight in hours
+  const [startPos, setStartPos] = useState<Vector3>({ x: 7000, y: 0, z: 0 })
+  const [targetPos, setTargetPos] = useState<Vector3>({ x: -384400, y: 0, z: 0 }) // Moon approx
 
-  const handlePlayPause = () => {
-    setIsPlaying(!isPlaying)
-    console.log(isPlaying ? 'Pausing trajectory simulation' : 'Starting trajectory simulation')
-  }
+  // Calculate trajectory points
+  const trajectoryPoints = useMemo(() => {
+    return generateLambertTrajectory(startPos, targetPos, 100);
+  }, [startPos, targetPos]);
 
-  const handleStop = () => {
-    setIsPlaying(false)
-    console.log('Stopping trajectory simulation')
-  }
+  const plotData = useMemo(() => {
+    // Earth Wireframe
+    const earth = {
+      x: [0], y: [0], z: [0],
+      mode: 'markers',
+      marker: { size: 10, color: '#3b82f6' },
+      name: 'Earth',
+      type: 'scatter3d'
+    };
 
-  const handleReset = () => {
-    setIsPlaying(false)
-    console.log('Resetting trajectory to initial position')
-  }
+    // Target (Moon)
+    const moon = {
+      x: [targetPos.x], y: [targetPos.y], z: [targetPos.z],
+      mode: 'markers',
+      marker: { size: 6, color: '#9ca3af' },
+      name: 'Moon',
+      type: 'scatter3d'
+    };
 
-  const trajectoryPhases = [
-    { id: "launch", name: "Launch", status: "completed" },
-    { id: "transfer", name: "Transfer Orbit", status: "active" },
-    { id: "approach", name: "Lunar Approach", status: "pending" },
-    { id: "insertion", name: "Orbit Insertion", status: "pending" }
-  ]
+    // Trajectory Path
+    const path = {
+      x: trajectoryPoints.map(p => p.x),
+      y: trajectoryPoints.map(p => p.y),
+      z: trajectoryPoints.map(p => p.z),
+      mode: 'lines',
+      line: { color: '#f97316', width: 4 },
+      name: 'Transfer Orbit',
+      type: 'scatter3d'
+    };
+
+    return [earth, moon, path];
+  }, [trajectoryPoints, targetPos]);
+
+  const layout = useMemo(() => ({
+    autosize: true,
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    scene: {
+      xaxis: { title: 'X (km)', gridcolor: '#334155', zerolinecolor: '#334155', showbackground: false },
+      yaxis: { title: 'Y (km)', gridcolor: '#334155', zerolinecolor: '#334155', showbackground: false },
+      zaxis: { title: 'Z (km)', gridcolor: '#334155', zerolinecolor: '#334155', showbackground: false },
+    },
+    margin: { l: 0, r: 0, t: 0, b: 0 },
+    showlegend: true,
+    legend: { x: 0, y: 1, font: { color: '#ffffff' } }
+  }), []);
 
   return (
     <div className="space-y-6">
       {/* 3D Visualization */}
-      <Card>
+      <Card className="bg-black/20 backdrop-blur-sm border-white/10">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Orbit className="w-5 h-5 text-mission-orange" />
-              3D Trajectory Visualization
+              Lambert Trajectory Solver
             </CardTitle>
             <div className="flex gap-2">
-              <Badge className="bg-success-green/20 text-success-green">
-                Lambert Solution Calculated
+              <Badge className="bg-mission-orange/20 text-mission-orange border-mission-orange">
+                Universal Variables
               </Badge>
-              <Button size="icon" variant="outline" data-testid="button-fullscreen">
-                <Maximize className="w-4 h-4" />
-              </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {/* Placeholder for 3D visualization - would be Three.js in real implementation */}
-          <div className="relative aspect-video bg-gradient-to-br from-space-blue/20 to-black/40 rounded-lg overflow-hidden">
-            <img 
-              src={trajectoryImage} 
-              alt="Trajectory Visualization" 
-              className="w-full h-full object-cover opacity-80"
-            />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center space-y-2">
-                <div className="text-white font-mono text-sm">
-                  3D Trajectory Display
-                </div>
-                <div className="text-mission-orange font-mono text-xs">
-                  Earth → L1 Lagrange → Moon Orbit
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-3 h-[500px] border border-white/10 rounded-lg overflow-hidden bg-black/40">
+              <Plot
+                data={plotData as any}
+                layout={layout as any}
+                useResizeHandler
+                className="w-full h-full"
+                config={{ displayModeBar: false }}
+              />
+            </div>
+
+            {/* Controls */}
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="tof">Time of Flight (Hours)</Label>
+                <div className="flex items-center gap-4">
+                  <Slider
+                    id="tof"
+                    value={tof}
+                    onValueChange={setTof}
+                    max={120}
+                    min={12}
+                    step={1}
+                    className="flex-1"
+                  />
+                  <span className="font-mono w-12 text-right">{tof[0]}h</span>
                 </div>
               </div>
-            </div>
-            
-            {/* Overlay Controls */}
-            <div className="absolute bottom-4 left-4 right-4">
-              <div className="flex items-center justify-between bg-black/60 backdrop-blur-sm rounded-lg p-3">
-                <div className="flex items-center gap-2">
-                  <Button 
-                    size="icon" 
-                    variant="outline" 
-                    onClick={handlePlayPause}
-                    data-testid="button-play-pause"
-                    className="text-white border-white/30 hover:bg-white/10"
-                  >
-                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                  </Button>
-                  <Button 
-                    size="icon" 
-                    variant="outline" 
-                    onClick={handleStop}
-                    data-testid="button-stop"
-                    className="text-white border-white/30 hover:bg-white/10"
-                  >
-                    <Square className="w-4 h-4" />
-                  </Button>
-                  <Button 
-                    size="icon" 
-                    variant="outline" 
-                    onClick={handleReset}
-                    data-testid="button-reset"
-                    className="text-white border-white/30 hover:bg-white/10"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                  </Button>
-                </div>
-                
-                <div className="flex items-center gap-4 text-white text-sm">
-                  <span>Time Scale:</span>
-                  <div className="w-24">
-                    <Slider
-                      value={timeScale}
-                      onValueChange={setTimeScale}
-                      max={10}
-                      min={0.1}
-                      step={0.1}
-                      className="w-full"
+
+              <div className="space-y-2">
+                <Label>Target Position (km)</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-xs text-muted-foreground">X</span>
+                    <Input
+                      type="number"
+                      value={targetPos.x}
+                      onChange={e => setTargetPos({ ...targetPos, x: Number(e.target.value) })}
+                      className="bg-white/5"
                     />
                   </div>
-                  <span>{timeScale[0]}x</span>
+                  <div>
+                    <span className="text-xs text-muted-foreground">Y</span>
+                    <Input
+                      type="number"
+                      value={targetPos.y}
+                      onChange={e => setTargetPos({ ...targetPos, y: Number(e.target.value) })}
+                      className="bg-white/5"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Button className="w-full bg-mission-orange hover:bg-mission-orange/90">
+                <Calculator className="w-4 h-4 mr-2" />
+                Recalculate Solution
+              </Button>
+
+              <div className="p-4 rounded-lg bg-white/5 space-y-2 text-sm font-mono">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Transfer Type:</span>
+                  <span className="text-success-green">Elliptical</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Delta V:</span>
+                  <span>3.12 km/s</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Eccentricity:</span>
+                  <span>0.84</span>
                 </div>
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
-
-      {/* Mission Phases */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="w-5 h-5 text-mission-orange" />
-              Mission Phases
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {trajectoryPhases.map((phase) => (
-                <div 
-                  key={phase.id}
-                  className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer hover-elevate ${
-                    selectedPhase === phase.id ? 'bg-mission-orange/10 border-mission-orange' : 'border-border'
-                  }`}
-                  onClick={() => {
-                    setSelectedPhase(phase.id)
-                    console.log(`Selected trajectory phase: ${phase.name}`)
-                  }}
-                  data-testid={`phase-${phase.id}`}
-                >
-                  <span className="font-medium">{phase.name}</span>
-                  <Badge 
-                    className={
-                      phase.status === 'completed' ? 'bg-success-green/20 text-success-green' :
-                      phase.status === 'active' ? 'bg-mission-orange/20 text-mission-orange' :
-                      'bg-neutral-gray/20 text-neutral-gray'
-                    }
-                  >
-                    {phase.status}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Trajectory Parameters</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4 font-mono text-sm">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-muted-foreground">Total ΔV</div>
-                  <div className="font-semibold">3.15 km/s</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Flight Time</div>
-                  <div className="font-semibold">72.4 hours</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Fuel Mass</div>
-                  <div className="font-semibold">1,247 kg</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Efficiency</div>
-                  <div className="font-semibold text-success-green">94.2%</div>
-                </div>
-              </div>
-              
-              <div className="pt-4 border-t">
-                <div className="text-muted-foreground mb-2">AI Recommendations</div>
-                <div className="text-sm space-y-1">
-                  <div>• Optimal launch window: 2024-03-15 14:30 UTC</div>
-                  <div>• Solar activity favorable for 48-hour period</div>
-                  <div>• Debris avoidance maneuver at T+36:15</div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   )
 }
