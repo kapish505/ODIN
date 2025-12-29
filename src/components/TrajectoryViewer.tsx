@@ -15,8 +15,10 @@ import {
   Play,
   Pause,
   Terminal,
-  Activity
+  Activity,
+  HelpCircle
 } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import Plotly from "plotly.js-dist-min"
 import createPlotlyComponent from "react-plotly.js/factory"
 import { generateLambertTrajectory, Vector3, calculateDeltaV, assessMissionRisk, WeatherConstraint } from "@/lib/lambert/solver"
@@ -426,13 +428,33 @@ export default function TrajectoryViewer() {
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">Solar Activity</span>
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  Solar Activity
+                  <Tooltip delayDuration={300}>
+                    <TooltipTrigger>
+                      <HelpCircle className="w-3 h-3 text-muted-foreground hover:text-white transition-colors" />
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[200px] bg-black/90 border-white/20 text-xs">
+                      <p>Current intensity of solar flares (X-Ray flux) and geomagnetic storms affecting cislunar space.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </span>
                 <Badge variant="outline" className={`text-[10px] ${trueRiskContext.constraint.solarFlare ? 'text-red-400 border-red-500' : 'text-green-400 border-green-900'}`}>
                   {trueRiskContext.constraint.solarFlare ? "FLARE DETECTED" : "NOMINAL"}
                 </Badge>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">Radiation Flux</span>
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  Radiation Flux
+                  <Tooltip delayDuration={300}>
+                    <TooltipTrigger>
+                      <HelpCircle className="w-3 h-3 text-muted-foreground hover:text-white transition-colors" />
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[200px] bg-black/90 border-white/20 text-xs">
+                      <p>Density of high-energy protons in the flight path. &gt;50% requires trajectory abort or hardening.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </span>
                 <Badge variant="outline" className={`text-[10px] ${trueRiskContext.constraint.radiationFlux > 50 ? 'text-red-400 border-red-500' : 'text-green-400 border-green-900'}`}>
                   {trueRiskContext.constraint.radiationFlux}%
                 </Badge>
@@ -455,14 +477,35 @@ export default function TrajectoryViewer() {
             <CardContent className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <span className="text-[10px] text-muted-foreground block mb-1">DELTA-V EST</span>
+                  <span className="text-[10px] text-muted-foreground block mb-1 flex items-center gap-1">
+                    DELTA-V EST
+                    <Tooltip delayDuration={300}>
+                      <TooltipTrigger>
+                        <HelpCircle className="w-3 h-3 text-muted-foreground hover:text-white transition-colors" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[200px] bg-black/90 border-white/20 text-xs">
+                        <p>Change in velocity required to perform the transfer orbit maneuver. Higher values require more fuel.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </span>
                   <span className="text-lg font-mono font-bold text-white">
-                    {calculateDeltaV({ x: 10, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, startPos, targetPos).toFixed(2)}
+                    {/* Add subtle jitter to Delta-V to simulate sensor noise */}
+                    {(calculateDeltaV({ x: 10, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, startPos, targetPos) + (Math.sin(Date.now() / 1000) * 0.02)).toFixed(2)}
                   </span>
                   <span className="text-[10px] text-gray-500 ml-1">km/s</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-muted-foreground block mb-1">WINDOW</span>
+                  <span className="text-[10px] text-muted-foreground block mb-1 flex items-center gap-1">
+                    WINDOW
+                    <Tooltip delayDuration={300}>
+                      <TooltipTrigger>
+                        <HelpCircle className="w-3 h-3 text-muted-foreground hover:text-white transition-colors" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[200px] bg-black/90 border-white/20 text-xs">
+                        <p>Remaining launch opportunity duration before optimal alignment is lost.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </span>
                   <span className="text-lg font-mono font-bold text-white">72</span>
                   <span className="text-[10px] text-gray-500 ml-1">HRS</span>
                 </div>
@@ -494,7 +537,6 @@ export default function TrajectoryViewer() {
                       }`}>{log.message}</span>
                   </div>
                 ))}
-                {/* Anchor for auto-scroll could go here */}
               </div>
             </CardContent>
           </Card>

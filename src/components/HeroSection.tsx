@@ -1,19 +1,10 @@
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Rocket, Shield, Brain, ArrowRight, Cpu, Activity } from "lucide-react"
-import { useLocation } from "wouter"
+import { Link } from "wouter"
 import earthImage from "@assets/generated_images/Earth_from_space_backdrop_d272d337.png"
 
 export default function HeroSection() {
-  const [, setLocation] = useLocation()
-
-  const handleGetStarted = () => {
-    setLocation("/trajectory")
-  }
-
-  const handleViewDemo = () => {
-    setLocation("/dashboard")
-  }
 
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black">
@@ -60,23 +51,14 @@ export default function HeroSection() {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center pt-8 animate-in fade-in slide-in-from-bottom-5 duration-1000 delay-200">
-            <Button
-              size="lg"
-              className="bg-mission-orange hover:bg-mission-orange/80 text-black font-bold px-10 py-6 text-lg tracking-wide rounded-none clip-path-polygon border-glow transition-all hover:scale-105"
-              onClick={handleGetStarted}
-            >
-              <Rocket className="w-5 h-5 mr-3" />
-              INITIATE SEQUENCE
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="border-white/20 text-white hover:bg-white/5 backdrop-blur-md px-10 py-6 text-lg font-mono tracking-wide rounded-none hover:border-space-blue transition-colors"
-              onClick={handleViewDemo}
-            >
-              SYSTEM DEMO
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
+            <Link href="/dashboard">
+              <Button className="h-14 px-8 bg-mission-orange text-black font-Orbitron font-bold tracking-widest text-lg hover:bg-white hover:shadow-[0_0_30px_rgba(255,255,255,0.6)] transition-all duration-300 clip-path-slant relative overflow-hidden group">
+                <span className="relative z-10 flex items-center gap-2">
+                  INITIALIZE SEQUENCE <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </span>
+                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+              </Button>
+            </Link>
           </div>
 
           {/* Feature Grid */}
