@@ -1,17 +1,11 @@
-import { useEffect, useState } from "react"
-import { Switch, Route, useLocation, Link } from "wouter"
+import { Switch, Route, Link } from "wouter"
 import { queryClient } from "./lib/queryClient"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { Toaster } from "@/components/ui/toaster"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 
-
-
-import AppSidebar from "@/components/AppSidebar"
 import HeroSection from "@/components/HeroSection"
 import TrajectoryViewer from "@/components/TrajectoryViewer"
-
 
 import NotFound from "@/pages/not-found"
 import AboutPage from "@/pages/about"
@@ -45,96 +39,32 @@ function TrajectoryPage() {
   )
 }
 
-
-
 export default function App() {
-  const [showLanding, setShowLanding] = useState(true)
-  const [pathname] = useLocation()
-
-  // Auto-exit landing when navigating to any route
-  useEffect(() => {
-    if (pathname !== "/" && showLanding) {
-      setShowLanding(false)
-    }
-  }, [pathname, showLanding])
-
-  // ODIN system sidebar width configuration
-  const sidebarStyle = {
-    "--sidebar-width": "18rem",
-    "--sidebar-width-icon": "4rem",
-  }
-
-  if (showLanding) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <div className="min-h-screen bg-background">
-            {/* Landing Header */}
-            <header className="fixed top-0 right-0 z-50 p-4">
-              <div className="flex items-center gap-2">
-                {/* Theme toggle removed */}
-              </div>
-            </header>
-
-            {/* Hero Section */}
-            <HeroSection />
-
-            {/* Enter System Button */}
-            <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50">
-              <button
-                onClick={() => {
-                  setShowLanding(false)
-                  console.log('Entering ODIN mission control system')
-                }}
-                className="bg-mission-orange hover:bg-mission-orange/90 text-white px-8 py-4 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all active-elevate-2"
-                data-testid="button-enter-system"
-              >
-                Enter Mission Control
-              </button>
-            </div>
-          </div>
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
-    )
-  }
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <SidebarProvider style={sidebarStyle as React.CSSProperties}>
-          <div className="flex h-screen w-full bg-background">
-            <AppSidebar />
+        <div className="min-h-screen bg-background">
+          {/* Header */}
+          <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-4 border-b border-border bg-background/95 backdrop-blur-sm">
+            <Link href="/" data-testid="link-home" className="outline-none">
+              <div className="cursor-pointer select-none">
+                <h2 className="text-xl font-bold text-space-blue">ODIN</h2>
+                <p className="text-sm text-muted-foreground">Mission Control System</p>
+              </div>
+            </Link>
 
-            <div className="flex flex-col flex-1 overflow-hidden">
-              {/* Header */}
-              <header className="flex items-center justify-between p-4 border-b border-border bg-background/95 backdrop-blur-sm">
-                <div className="flex items-center gap-4">
-                  <SidebarTrigger data-testid="button-sidebar-toggle" />
-                  <Link href="/" data-testid="link-home" className="outline-none">
-                    <div className="cursor-pointer select-none">
-                      <h2 className="text-xl font-bold text-space-blue">ODIN</h2>
-                      <p className="text-sm text-muted-foreground">Mission Control System</p>
-                    </div>
-                  </Link>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <Link href="/about" className="text-sm font-mono text-muted-foreground hover:text-white transition-colors">
-                    [ABOUT PROJECT]
-                  </Link>
-                </div>
-              </header>
-
-              {/* Main Content */}
-              <main className="flex-1 overflow-auto bg-background">
-                <Router />
-              </main>
-
-
+            <div className="flex items-center gap-4">
+              <Link href="/about" className="text-sm font-mono text-muted-foreground hover:text-white transition-colors">
+                [ABOUT PROJECT]
+              </Link>
             </div>
-          </div>
-        </SidebarProvider>
+          </header>
+
+          {/* Main Content */}
+          <main className="pt-20">
+            <Router />
+          </main>
+        </div>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
