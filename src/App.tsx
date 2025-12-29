@@ -182,12 +182,7 @@ export default function App() {
                   <Router />
                 </main>
 
-                {/* Footer */}
-                <footer className="border-t border-border bg-background/95 backdrop-blur-sm p-4">
-                  <div className="text-center text-sm text-muted-foreground">
-                    Made by Team C-Men
-                  </div>
-                </footer>
+
               </div>
             </div>
           </SidebarProvider>
