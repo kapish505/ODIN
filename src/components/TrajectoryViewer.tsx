@@ -75,22 +75,22 @@ export default function TrajectoryViewer() {
 
   // Calculate the "True Risk" based on API data
   const trueRiskContext = useMemo(() => {
-    // DEMO OVERRIDE: Maintain simulation integrity for the "Mother's Day Storm" scenario
-    // regardless of API availability or rate limits.
-    if (launchDate.startsWith("2024-05-10")) {
-      const demoConstraint = { solarFlare: true, geomagneticStorm: true, radiationFlux: 100 };
-      return {
-        constraint: demoConstraint,
-        risk: assessMissionRisk(demoConstraint, 3)
-      };
-    }
-
     if (!notifications) return { constraint: { solarFlare: false, geomagneticStorm: false, radiationFlux: 0 }, risk: { riskLevel: "Low", message: "Nominal" } };
 
     const launchTime = new Date(launchDate).getTime();
+    console.log(`[ODIN] Launch Time: ${launchDate} (${launchTime})`);
+
     const windowAlerts = notifications.filter(n => {
       const issueTime = new Date(n.messageIssueTime).getTime();
-      return Math.abs(issueTime - launchTime) < (96 * 60 * 60 * 1000); // Expanded to 96h window
+      const diffHours = (issueTime - launchTime) / (1000 * 60 * 60);
+      const inWindow = Math.abs(diffHours) < 96; // 96h window
+
+      // Log relevant alerts to see why they match or fail
+      if (Math.abs(diffHours) < 120) {
+        console.log(`[ODIN] Alert ${n.messageID} (${n.messageType}): ${diffHours.toFixed(1)}h from launch. Included? ${inWindow}`);
+      }
+
+      return inWindow;
     });
 
     const constraint = {
@@ -98,6 +98,8 @@ export default function TrajectoryViewer() {
       geomagneticStorm: windowAlerts.some(n => n.messageType.includes("CME") || n.messageType.includes("GST")),
       radiationFlux: windowAlerts.some(n => n.messageType.includes("SEP")) ? 100 : 10
     };
+
+    console.log("[ODIN] Calculated Constraints:", constraint);
 
     // Pass 3 days (72 hours) as standard Moon transit time
     return { constraint, risk: assessMissionRisk(constraint, 3) };
