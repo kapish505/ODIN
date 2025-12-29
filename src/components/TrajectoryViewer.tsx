@@ -273,7 +273,7 @@ export default function TrajectoryViewer() {
               />
 
               {/* Floating HUD Status */}
-              <div className="absolute top-4 left-4 flex flex-col gap-2">
+              <div className="absolute top-4 right-4 flex flex-col gap-2">
                 <Badge variant="outline" className={`
                              ${simulationPhase === 'NOMINAL' ? 'border-gray-500 text-gray-400' :
                     simulationPhase === 'ANALYZING' ? 'border-yellow-500 text-yellow-500 animate-pulse' :
@@ -301,10 +301,10 @@ export default function TrajectoryViewer() {
                   <div key={i} className="mb-2">
                     <span className="text-muted-foreground opacity-50">[{log.timestamp}]</span>
                     <span className={`font-bold ml-2 ${log.type === 'INFO' ? 'text-blue-400' :
-                        log.type === 'WARN' ? 'text-yellow-400' :
-                          log.type === 'CRITICAL' ? 'text-red-500 animate-pulse' :
-                            log.type === 'DECISION' ? 'text-purple-400' :
-                              'text-green-400'
+                      log.type === 'WARN' ? 'text-yellow-400' :
+                        log.type === 'CRITICAL' ? 'text-red-500 animate-pulse' :
+                          log.type === 'DECISION' ? 'text-purple-400' :
+                            'text-green-400'
                       }`}>[{log.type}]</span>
                     <span className="text-gray-300 ml-2">{log.message}</span>
                   </div>
