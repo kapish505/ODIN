@@ -8,7 +8,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 
 import { ThemeProvider } from "@/components/ThemeProvider"
 import ThemeToggle from "@/components/ThemeToggle"
-import LanguageSwitcher from "@/components/LanguageSwitcher"
+
 import AppSidebar from "@/components/AppSidebar"
 import HeroSection from "@/components/HeroSection"
 import MissionDashboard from "@/components/MissionDashboard"
@@ -18,11 +18,13 @@ import DecisionLog from "@/components/DecisionLog"
 
 
 import NotFound from "@/pages/not-found"
+import AboutPage from "@/pages/about"
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={HomePage} />
+      <Route path="/about" component={AboutPage} />
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/trajectory" component={TrajectoryPage} />
       <Route path="/threats" component={ThreatsPage} />
@@ -121,7 +123,6 @@ export default function App() {
               {/* Landing Header */}
               <header className="fixed top-0 right-0 z-50 p-4">
                 <div className="flex items-center gap-2">
-                  <LanguageSwitcher />
                   <ThemeToggle />
                 </div>
               </header>
@@ -171,8 +172,10 @@ export default function App() {
                     </Link>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <LanguageSwitcher />
+                  <div className="flex items-center gap-4">
+                    <Link href="/about" className="text-sm font-mono text-muted-foreground hover:text-white transition-colors">
+                      [ABOUT PROJECT]
+                    </Link>
                     <ThemeToggle />
                   </div>
                 </header>
