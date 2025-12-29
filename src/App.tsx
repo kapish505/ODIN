@@ -11,10 +11,7 @@ import ThemeToggle from "@/components/ThemeToggle"
 
 import AppSidebar from "@/components/AppSidebar"
 import HeroSection from "@/components/HeroSection"
-import MissionDashboard from "@/components/MissionDashboard"
 import TrajectoryViewer from "@/components/TrajectoryViewer"
-import ThreatMonitor from "@/components/ThreatMonitor"
-import DecisionLog from "@/components/DecisionLog"
 
 
 import NotFound from "@/pages/not-found"
@@ -25,11 +22,7 @@ function Router() {
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/about" component={AboutPage} />
-      <Route path="/dashboard" component={DashboardPage} />
       <Route path="/trajectory" component={TrajectoryPage} />
-      <Route path="/threats" component={ThreatsPage} />
-      <Route path="/decisions" component={DecisionsPage} />
-
       <Route component={NotFound} />
     </Switch>
   )
@@ -37,20 +30,6 @@ function Router() {
 
 function HomePage() {
   return <HeroSection />
-}
-
-function DashboardPage() {
-  return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground">Mission Control Dashboard</h1>
-        <p className="text-muted-foreground">
-          Monitor active missions, system status, and operational metrics
-        </p>
-      </div>
-      <MissionDashboard />
-    </div>
-  )
 }
 
 function TrajectoryPage() {
@@ -63,34 +42,6 @@ function TrajectoryPage() {
         </p>
       </div>
       <TrajectoryViewer />
-    </div>
-  )
-}
-
-function ThreatsPage() {
-  return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground">Threat Detection System</h1>
-        <p className="text-muted-foreground">
-          Real-time monitoring of solar activity, space debris, and radiation exposure
-        </p>
-      </div>
-      <ThreatMonitor />
-    </div>
-  )
-}
-
-function DecisionsPage() {
-  return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground">AI Decision Analysis</h1>
-        <p className="text-muted-foreground">
-          Review AI-generated trajectory decisions and optimization recommendations
-        </p>
-      </div>
-      <DecisionLog />
     </div>
   )
 }

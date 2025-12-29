@@ -38,23 +38,22 @@ export default function HeroSection() {
 
             <div className="flex flex-col items-center gap-2">
               <h2 className="text-xl md:text-3xl font-bold text-space-blue tracking-[0.2em] font-display uppercase text-glow">
-                Orbital Dynamics Intelligence Network
+                Precision Trajectory Optimizer
               </h2>
               <div className="h-px w-24 bg-gradient-to-r from-transparent via-space-blue to-transparent mt-2" />
             </div>
 
             <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed font-light">
-              Advanced autonomous trajectory optimization for cislunar operations.
-              Powered by <span className="text-white font-medium">Deep Reinforcement Learning</span> and <span className="text-white font-medium">NASA DONKI</span> telemetry.
+              Advanced cislunar trajectory planning powered by <span className="text-white font-medium">Lambert's Problem Solver</span> and real-time <span className="text-white font-medium">NASA DONKI</span> space weather data.
             </p>
           </div>
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center pt-8 animate-in fade-in slide-in-from-bottom-5 duration-1000 delay-200">
-            <Link href="/dashboard">
+            <Link href="/trajectory">
               <Button className="h-14 px-8 bg-mission-orange text-black font-Orbitron font-bold tracking-widest text-lg hover:bg-white hover:shadow-[0_0_30px_rgba(255,255,255,0.6)] transition-all duration-300 clip-path-slant relative overflow-hidden group">
                 <span className="relative z-10 flex items-center gap-2">
-                  INITIALIZE SEQUENCE <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  LAUNCH TRAJECTORY PLANNER <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </span>
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
               </Button>
@@ -65,22 +64,22 @@ export default function HeroSection() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
             {[
               {
-                icon: Shield,
-                title: "Threat Monitor",
-                desc: "Real-time analysis of Solar Radiation Storms (S1-S5) and Coronal Mass Ejections.",
-                color: "text-red-400"
+                icon: Cpu,
+                title: "Lambert Solver",
+                desc: "High-precision orbital mechanics solver for Earth-Moon transfer trajectories.",
+                color: "text-blue-400"
               },
               {
                 icon: Brain,
-                title: "Neural Engine",
-                desc: "1.2M parameter optimization model for continuous trajectory refinement.",
+                title: "Delta-V Optimizer",
+                desc: "Real-time fuel cost analysis and trajectory comparison for mission efficiency.",
                 color: "text-purple-400"
               },
               {
-                icon: Cpu,
-                title: "Lambert Solver",
-                desc: "High-precision orbital mechanics solver for rapid intercept calculation.",
-                color: "text-blue-400"
+                icon: Shield,
+                title: "Space Weather Integration",
+                desc: "Live NASA DONKI data for solar radiation and CME threat assessment.",
+                color: "text-red-400"
               }
             ].map((feature, i) => (
               <div key={i} className="group relative p-1">

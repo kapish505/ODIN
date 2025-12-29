@@ -8,16 +8,15 @@ import {
   SidebarMenuButton,
   SidebarMenuItem
 } from "@/components/ui/sidebar"
-import { Home, Rocket, Shield, Brain, Target, Bot } from "lucide-react"
+import { Target, Orbit, Calculator, Download } from "lucide-react"
 import { useLocation } from "wouter"
 import { Link } from "wouter"
 
 const menuItems = [
-  { title: "Mission Control", url: "/dashboard", icon: Home },
   { title: "Trajectory Planning", url: "/trajectory", icon: Target },
-  { title: "Active Missions", url: "/dashboard", icon: Rocket },
-  { title: "Threat Detection", url: "/threats", icon: Shield },
-  { title: "AI Decisions", url: "/decisions", icon: Brain },
+  { title: "Mission Presets", url: "/trajectory?preset=true", icon: Orbit },
+  { title: "Delta-V Calculator", url: "/trajectory?calculator=true", icon: Calculator },
+  { title: "Export Data", url: "/trajectory?export=true", icon: Download },
 ]
 
 export default function AppSidebar() {
