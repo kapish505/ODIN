@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Rocket, Shield, Brain, ArrowRight, Cpu, Activity } from "lucide-react"
+import { Shield, Brain, ArrowRight, Cpu } from "lucide-react"
 import { Link } from "wouter"
 import earthImage from "@assets/generated_images/Earth_from_space_backdrop_d272d337.png"
 
@@ -27,10 +26,6 @@ export default function HeroSection() {
 
           {/* Main Heading */}
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-5 duration-1000">
-            <Badge variant="outline" className="bg-space-blue/10 text-space-blue border-space-blue/50 px-4 py-1.5 text-xs font-mono tracking-widest uppercase">
-              <Activity className="w-3 h-3 mr-2 animate-pulse" />
-              System Online // v2.0
-            </Badge>
 
             <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-white/50 tracking-tighter font-display leading-[0.9]">
               ODIN

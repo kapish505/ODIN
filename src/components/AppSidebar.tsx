@@ -8,15 +8,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem
 } from "@/components/ui/sidebar"
-import { Target, Orbit, Calculator, Download } from "lucide-react"
+import { Target } from "lucide-react"
 import { useLocation } from "wouter"
 import { Link } from "wouter"
 
 const menuItems = [
   { title: "Trajectory Planning", url: "/trajectory", icon: Target },
-  { title: "Mission Presets", url: "/trajectory?preset=true", icon: Orbit },
-  { title: "Delta-V Calculator", url: "/trajectory?calculator=true", icon: Calculator },
-  { title: "Export Data", url: "/trajectory?export=true", icon: Download },
 ]
 
 export default function AppSidebar() {
