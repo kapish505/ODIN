@@ -111,10 +111,27 @@ export default function TrajectoryViewer() {
   // This is the "Safe" path we *might* switch to
   const optimizedPath = useMemo(() => {
     return nominalPath.map((p, i) => {
-      const progress = i / 100;
-      const deviation = Math.sin(progress * Math.PI) * 40000;
-      // Add Z-deviation for avoidance
-      return { ...p, z: p.z + deviation };
+      // Phase 1: Co-incident with Nominal Path (0-30%)
+      if (i <= 30) {
+        return p;
+      }
+
+      // Phase 2: Divergence (31-100%)
+      // We want a smooth ease-in from 0 deviation at i=30
+      const progress = (i - 30) / 70; // Normalized 0..1 for the remaining 70%
+
+      // Smooth step function for natural orbital change
+      // Using sine squared for smooth ease-in/ease-out
+      const deviationFactor = Math.sin(progress * Math.PI);
+
+      // Calculate deviation vector (mostly Z-axis for high-inclination)
+      const zDeviation = deviationFactor * 40000;
+
+      return {
+        x: p.x,
+        y: p.y,
+        z: p.z + zDeviation
+      };
     });
   }, [nominalPath]);
 
@@ -157,16 +174,15 @@ export default function TrajectoryViewer() {
         // Normal Animation Loop
         animationRef.current = setInterval(() => {
           setAnimationFrame(prev => {
-            const nextFrame = (prev + 1) % 100;
-
-            // --- EVENT INJECTION LOGIC ---
-            if (nextFrame === 0) {
-              setSimulationPhase('NOMINAL');
-              setLogs([]);
-              addLog("INFO", "Mission Clock Start. T-0.");
-              addLog("INFO", "Tracking Nominal Trajectory.");
+            if (prev >= 100) {
+              setIsPlaying(false);
+              if (animationRef.current) clearInterval(animationRef.current);
+              return 100;
             }
 
+            const nextFrame = prev + 1;
+
+            // --- EVENT INJECTION LOGIC ---
             if (nextFrame === 25 && simulationPhaseRef.current === 'NOMINAL') {
               addLog("INFO", "Initiating Deep Space Environmental Scan...");
             }
@@ -176,12 +192,15 @@ export default function TrajectoryViewer() {
               // Check Risk
               if (trueRiskContext.risk.riskLevel !== "Low") {
                 console.log("[ODIN] Risk Detected. Transitioning to ANALYZING.");
-                setSimulationPhase('ANALYZING'); // This will trigger cleanup and switch to the ANALYZING block
-                // IMPORTANT: Do NOT return nextFrame here if we want to 'pause' visually, 
-                // but returning it is fine as the Interval will be cleared in next render.
+                setSimulationPhase('ANALYZING');
+                // No need for return check, interval clears naturally on re-render
               } else {
                 addLog("SUCCESS", "Scan Nominal. No threats detected.");
               }
+            }
+
+            if (nextFrame === 100) {
+              addLog("SUCCESS", "Mission Complete. Target Orbit Achieved.");
             }
 
             return nextFrame;
@@ -289,11 +308,23 @@ export default function TrajectoryViewer() {
                   <Slider value={speed} onValueChange={setSpeed} max={100} min={1} step={1} className="w-24" />
                 </div>
                 <Button size="sm" variant={isPlaying ? "destructive" : "default"} onClick={() => {
-                  if (!isPlaying && simulationPhase === 'IDLE') setSimulationPhase('NOMINAL');
+                  // If mission ended (frame 100) or we want to restart
+                  if (animationFrame >= 100) {
+                    setAnimationFrame(0);
+                    setSimulationPhase('NOMINAL');
+                    setLogs([]);
+                    setIsPlaying(true);
+                    return;
+                  }
+
+                  if (!isPlaying && simulationPhase === 'IDLE') {
+                    setSimulationPhase('NOMINAL');
+                    setAnimationFrame(0);
+                  }
                   setIsPlaying(!isPlaying)
                 }}>
                   {isPlaying ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-                  {isPlaying ? "Pause" : "Simulate Mission"}
+                  {animationFrame >= 100 ? "Restart Mission" : isPlaying ? "Pause" : "Simulate Mission"}
                 </Button>
               </div>
             </CardHeader>
